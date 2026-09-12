@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./server",
+    "baseUrl": "./",
+    "noEmit": false,
+    "ignoreDeprecations": "6.0",
+    "noImplicitAny": false,
+    "types": ["node", "jest", "express"]
+  },
+  "include": ["server/**/*.ts"],
+  "exclude": ["node_modules", "test", "dist", "src", "**/*spec.ts"]
+}

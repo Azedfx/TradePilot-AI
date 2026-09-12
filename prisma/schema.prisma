@@ -1,0 +1,279 @@
+// TradePilot AI - Database schema (Prisma + PostgreSQL)
+// Represents the research pipeline: sessions -> plans -> skill runs ->
+// findings/sources -> historical matches -> thesis -> stress tests.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../server/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ResearchStatus {
+  PENDING
+  PLANNING
+  RESEARCHING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum SkillRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ThesisBias {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+model ResearchSession {
+  id        String @id @default(uuid()) @db.Uuid
+  question  String
+  symbol    String?
+  assetType String? @default("crypto")
+  timeframe String?
+
+  status ResearchStatus @default(PENDING)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  plan              ResearchPlan?
+  skillRuns         SkillRun[]
+  findings          Finding[]
+  sources           Source[]
+  messages          ResearchMessage[]
+  historicalMatches HistoricalMatch[]
+  thesis            Thesis?
+  stressTests       StressTest[]
+
+  @@index([symbol])
+  @@index([status])
+  @@map("research_sessions")
+}
+
+model ResearchPlan {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @unique @db.Uuid
+
+  objective String
+  plan      Json
+
+  createdAt DateTime @default(now())
+
+  session ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("research_plans")
+}
+
+model SkillRun {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid
+
+  skillName String
+  status    SkillRunStatus @default(PENDING)
+
+  input  Json?
+  output Json?
+  error  String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int?
+
+  session  ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  findings Finding[]
+
+  @@index([sessionId])
+  @@index([skillName])
+  @@map("skill_runs")
+}
+
+model Finding {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid
+  skillRunId String? @db.Uuid
+  sourceId  String? @db.Uuid
+
+  category  String
+  title     String
+  statement String
+
+  importance String?
+  sentiment  String?
+
+  data Json?
+
+  createdAt DateTime @default(now())
+
+  session  ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  skillRun SkillRun?       @relation(fields: [skillRunId], references: [id], onDelete: SetNull)
+  source   Source?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([category])
+  @@map("findings")
+}
+
+model Source {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid
+  skillRunId String? @db.Uuid
+
+  title       String?
+  url         String?
+  publisher   String?
+  sourceType  String?
+  publishedAt DateTime?
+  retrievedAt DateTime @default(now())
+
+  metadata Json?
+
+  session  ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  findings Finding[]
+
+  @@index([sessionId])
+  @@map("sources")
+}
+
+model HistoricalEvent {
+  id        String @id @default(uuid()) @db.Uuid
+  symbol    String
+  eventType String
+  eventDate DateTime
+
+  epsExpected Float?
+  epsActual   Float?
+  epsSurprisePct Float?
+
+  revenueExpected Float?
+  revenueActual   Float?
+  revenueSurprisePct Float?
+
+  guidanceChangePct Float?
+
+  rsi             Float?
+  priceVs200maPct Float?
+  sentimentScore  Float?
+
+  return1dPct Float?
+  return5dPct Float?
+  return20dPct Float?
+
+  volatility20d Float?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  matches HistoricalMatch[]
+
+  @@index([symbol])
+  @@index([eventType])
+  @@index([eventDate])
+  @@map("historical_events")
+}
+
+model HistoricalMatch {
+  id           String @id @default(uuid()) @db.Uuid
+  sessionId    String @db.Uuid
+  historicalEventId String @db.Uuid
+
+  similarityScore      Float
+  similarityExplanation String?
+
+  createdAt DateTime @default(now())
+
+  session         ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  historicalEvent HistoricalEvent @relation(fields: [historicalEventId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([historicalEventId])
+  @@map("historical_matches")
+}
+
+model Thesis {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @unique @db.Uuid
+
+  symbol     String
+  bias       ThesisBias
+  confidence Float
+  summary    String
+
+  bullCase Json?
+  bearCase Json?
+
+  catalysts Json?
+  risks     Json?
+
+  invalidationConditions Json?
+  historicalSummary       Json?
+  conclusion              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session     ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stressTests StressTest[]
+
+  @@index([symbol])
+  @@map("theses")
+}
+
+model StressTest {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid
+  thesisId  String? @db.Uuid
+
+  name         String
+  scenarioType String
+  assumptions  Json
+
+  historicalSampleSize Int?
+
+  medianReturn1d Float?
+  medianReturn5d Float?
+  medianReturn20d Float?
+
+  positiveProbability Float?
+  worstCase           Float?
+  bestCase            Float?
+
+  aiAnalysis String?
+
+  createdAt DateTime @default(now())
+
+  session ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  thesis  Thesis?         @relation(fields: [thesisId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("stress_tests")
+}
+
+model ResearchMessage {
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid
+
+  role     String
+  content  String
+  toolName String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  session ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("research_messages")
+}
