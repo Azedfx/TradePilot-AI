@@ -106,7 +106,7 @@ export function ResearchProgress() {
           <div className="absolute left-[7%] right-[7%] top-3 h-px bg-[#29435f]" />
 
           <div
-            className="absolute left-[7%] top-3 h-px bg-gradient-to-r from-[#21d6c1] via-[#19c8ef] to-[#6b7fff] transition-[width] duration-700 ease-out"
+            className="absolute left-[7%] top-3 h-px bg-linear-to-r from-[#21d6c1] via-[#19c8ef] to-[#6b7fff] transition-[width] duration-700 ease-out"
             style={{ width: `${fillFraction * 86}%` }}
           />
 
@@ -176,7 +176,7 @@ export function ResearchProgress() {
 
           {hasSkills || running ? (
             <div className="relative mb-3 h-0.5 overflow-hidden rounded-full bg-[#132b45]">
-              <div className="load-sweep absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-[#19c8ef] to-transparent" />
+              <div className="load-sweep absolute inset-y-0 w-1/3 rounded-full bg-linear-to-r from-transparent via-[#19c8ef] to-transparent" />
             </div>
           ) : null}
 

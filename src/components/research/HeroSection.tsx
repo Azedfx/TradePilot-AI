@@ -29,7 +29,7 @@ export function HeroSection() {
   return (
     <section className="relative min-h-81 overflow-hidden rounded-lg border border-[#173b5c] bg-[radial-gradient(circle_at_72%_45%,rgba(12,76,120,.24),transparent_32%),linear-gradient(135deg,#061a30,#03101f)]">
       {/* Decorative lines */}
-      <div className="pointer-events-none absolute right-[-50px] top-[-50px] h-82.5 w-107.5 opacity-40">
+      <div className="pointer-events-none absolute -right-12.5 -top-12.5 h-82.5 w-107.5 opacity-40">
         <div className="absolute inset-0 rounded-full border border-[#12476a]" />
         <div className="absolute inset-7.5 rounded-full border border-[#123c5d]" />
         <div className="absolute inset-16.25 rounded-full border border-[#0d3451]" />
@@ -101,20 +101,20 @@ export function HeroSection() {
 
       {/* AI network */}
       <div className="absolute right-5 top-13.75 hidden h-57.5 w-61.25 lg:block">
-        <NetworkLine className="left-10 top-22.5 w-18.75 rotate-[8deg]" />
-        <NetworkLine className="left-26.25 top-13.25 w-15 rotate-[-18deg]" />
-        <NetworkLine className="left-33.75 top-20.75 w-17.5 rotate-[-5deg]" />
-        <NetworkLine className="left-25 top-31.5 w-20 rotate-[24deg]" />
-        <NetworkLine className="left-10.75 top-33.75 w-18.75 rotate-[-20deg]" />
-        <NetworkLine className="left-32.5 top-40 w-20 rotate-[-28deg]" />
+        <NetworkLine className="left-10 top-22.5 w-18.75 rotate-8" />
+        <NetworkLine className="left-26.25 top-13.25 w-15 -rotate-18" />
+        <NetworkLine className="left-33.75 top-20.75 w-17.5 -rotate-5" />
+        <NetworkLine className="left-25 top-31.5 w-20 rotate-24" />
+        <NetworkLine className="left-10.75 top-33.75 w-18.75 -rotate-20" />
+        <NetworkLine className="left-32.5 top-40 w-20 -rotate-28" />
 
         <div className="absolute left-24 top-18.75 flex h-14 w-14 items-center justify-center rounded-xl border border-[#29b7ed]/60 bg-[#124a78]/70 text-2xl font-semibold text-[#9ee8ff] shadow-[0_0_30px_rgba(31,159,222,.4)]">
           AI
         </div>
 
         <NetworkTag text="News" icon={<Newspaper size={9} />} className="left-8 top-3" />
-        <NetworkTag text="Market" icon={<BarChart3 size={9} />} className="left-32.5 top-[-10px]" />
-        <NetworkTag text="Sentiment" icon={<Gauge size={9} />} className="right-[-10px] top-11.25" />
+        <NetworkTag text="Market" icon={<BarChart3 size={9} />} className="left-32.5 -top-2.5" />
+        <NetworkTag text="Sentiment" icon={<Gauge size={9} />} className="-right-2.5 top-11.25" />
         <NetworkTag text="Macro" icon={<Activity size={9} />} className="right-5 top-26.25" />
         <NetworkTag text="Historical" icon={<History size={9} />} className="right-5 top-37.5" />
         <NetworkTag text="Technical" icon={<LineChart size={9} />} className="left-5 top-28.75" />
@@ -127,7 +127,7 @@ export function HeroSection() {
 function NetworkLine({ className }: { className?: string }) {
   return (
     <div
-      className={`absolute h-px origin-left bg-gradient-to-r from-[#278cc0] to-transparent ${className}`}
+      className={`absolute h-px origin-left bg-linear-to-r from-[#278cc0] to-transparent ${className}`}
     />
   );
 }
