@@ -37,3 +37,6 @@ server/generated/prisma/
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Stakpak session files
+.stakpak/session*

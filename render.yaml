@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: tradepilot-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npx prisma generate && npm run build:api
+    # This project has no prisma/migrations history (schema is applied via
+    # `prisma db push`, not `prisma migrate`) — `migrate deploy` would fail
+    # with no migrations to apply.
+    startCommand: npx prisma db push --accept-data-loss && npm run start:api
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tradepilot-db
+          property: connectionString
+      # Set this to the deployed web service's public URL once it exists,
+      # e.g. https://tradepilot-web.onrender.com (no trailing slash).
+      - key: CORS_ORIGIN
+        sync: false
+      # Qwen (Bitget hackathon proxy) — get an API key per the S2 handbook.
+      - key: QWEN_API_KEY
+        sync: false
+      - key: QWEN_BASE_URL
+        value: https://hackathon.bitgetops.com/v1
+      - key: QWEN_MODEL
+        value: qwen3.8-max
+      # Bitget datahub MCP server for macro/market data; optional, skills
+      # fall back to direct APIs (Bitget, Yahoo Finance) if unset/unreachable.
+      - key: MCP_URL
+        sync: false
+
+  - type: web
+    name: tradepilot-web
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build:web
+    startCommand: npm run start:web
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      # Point this at the tradepilot-api service's public URL once it
+      # exists, e.g. https://tradepilot-api.onrender.com (no trailing slash).
+      # Next.js proxies /api/* server-side to this URL (see next.config.mjs).
+      - key: BACKEND_URL
+        sync: false
+
+databases:
+  - name: tradepilot-db
+    plan: free
+    databaseName: tradepilot
+    user: tradepilot

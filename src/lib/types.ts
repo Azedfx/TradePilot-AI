@@ -34,10 +34,28 @@ export interface StressPayload {
   recommendation: string;
 }
 
+export type UsMarketSession =
+  | 'regular'
+  | 'pre-market'
+  | 'after-hours'
+  | 'closed-overnight'
+  | 'closed-weekend';
+
+export interface MarketWindow {
+  session: UsMarketSession;
+  isRegularSessionOpen: boolean;
+  etClock: string;
+  nextOpenDescription: string;
+  /** Present (non-null) only when the market is closed — the rToken 7×24
+   * transmission note. Null while the regular session is open. */
+  note: string | null;
+}
+
 export interface ResearchResponse {
   sessionId: string;
   status: string;
   marketData?: MarketSnapshot | null;
+  marketWindow?: MarketWindow | null;
   thesis?: ThesisPayload | null;
   stressTests?: StressPayload[] | null;
 }
@@ -82,4 +100,28 @@ export interface ResearchSessionResponse extends ResearchResponse {
   skills: SkillRunView[];
   historicalMatches?: unknown[];
   messages?: unknown[];
+}
+
+export interface ReusableChecklistItem {
+  check: string;
+  why: string;
+}
+
+export interface RecurringPattern {
+  id: string;
+  message: string;
+  occurrences: number;
+  sessionsConsidered: number;
+}
+
+export interface ReviewReport {
+  sessionId: string;
+  generatedAt: string;
+  title: string;
+  recap: string;
+  badPatterns: string[];
+  recurring: RecurringPattern[];
+  checklist: ReusableChecklistItem[];
+  markdown: string;
+  source: 'rules';
 }

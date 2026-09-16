@@ -4,7 +4,7 @@ import { ResearchRepository } from '../db/research.repository';
 import { SkillsService } from '../skills/skills.service';
 import { ResearchContext, SkillResult } from '../skills/skill.types';
 import { ThesisService } from '../analysis/thesis.service';
-import { HistoricalService } from '../analysis/historical.service';
+import { HistoricalService, HistoricalStats } from '../analysis/historical.service';
 import { StressTestService } from '../analysis/stress-test.service';
 import { ReportService } from '../reports/report.service';
 import { LlmService } from '../llm/llm.service';
@@ -106,6 +106,42 @@ export class ResearchOrchestrator {
     const thesis = await this.thesisService.build(skillResults, symbols);
     const stressTests = await this.stressTestService.run(thesis, symbols);
 
+    // 3b. Historical distribution (returns, volatility, max drawdown) from
+    // real candles — the retrieval-side of decision stress testing. Safe to
+    // degrade: research continues without it if market-data is flaky.
+    let historical: unknown[] = [];
+    try {
+      historical = await Promise.all(
+        symbols.map((symbol) =>
+          this.historicalService.compute(symbol, context.timeframe, 200),
+        ),
+      );
+
+      for (const entry of historical as HistoricalStats[]) {
+        await this.repo.saveFinding({
+          sessionId,
+          category: 'historical',
+          title: `Historical distribution for ${entry.symbol}`,
+          statement: `${entry.sampleSize} candles from ${new Date(
+            entry.period.start,
+          ).toISOString().slice(0, 10)} to ${new Date(
+            entry.period.end,
+          ).toISOString().slice(0, 10)}: ${
+            entry.returns.total !== undefined
+              ? `${(entry.returns.total * 100).toFixed(1)}% total return, `
+              : ''
+          }${(entry.volatilityAnnualized * 100).toFixed(1)}% annualized volatility, ${
+            (entry.maxDrawdown * 100).toFixed(1)
+          }% historical max drawdown.`,
+          importance: 'medium',
+          sentiment: 'neutral',
+          data: entry,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Historical stats unavailable: ${String(error)}`);
+    }
+
     try {
       const persistedThesis = await this.repo.saveThesis({
         sessionId,
@@ -132,10 +168,11 @@ export class ResearchOrchestrator {
         }
       }
 
-      await this.reportService.generate({
+      const report = await this.reportService.generate({
         sessionId,
         context,
         findings: [],
+        skillResults,
         thesis: {
           symbols,
           direction: thesis.direction,
@@ -147,6 +184,15 @@ export class ResearchOrchestrator {
           generatedAt: new Date().toISOString(),
         },
         stressTests,
+        historical,
+      });
+
+      await this.repo.addMessage({
+        sessionId,
+        role: 'assistant',
+        content: report.markdown,
+        toolName: 'report',
+        metadata: { category: 'research-report', model: this.llm.provider },
       });
     } catch (error) {
       this.logger.error(`Analysis/persistence failed: ${error}`, error);

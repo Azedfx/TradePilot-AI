@@ -23,9 +23,11 @@ export interface ResearchSessionResponse {
   assetType?: string | null;
   skills: SkillRunView[];
   marketData?: unknown;
+  marketWindow?: unknown;
   thesis?: unknown;
   stressTests?: unknown[];
   historicalMatches?: unknown[];
+  findings?: unknown[];
   messages?: unknown[];
   report?: unknown;
 }
@@ -72,6 +74,16 @@ export class ResearchService {
         .catch(() => null);
     }
 
+    // Surface the macro skill's US-market-hours / rToken 7×24 note as a
+    // clean, structured field so the UI doesn't have to parse it out of a
+    // risk-text string.
+    const macroFinding = (session.findings ?? []).find(
+      (f) => f.category === 'macro',
+    );
+    const marketWindow =
+      (macroFinding?.data as { usMarketWindow?: unknown } | null)
+        ?.usMarketWindow ?? null;
+
     return {
       sessionId: session.id,
       question: session.question,
@@ -85,6 +97,7 @@ export class ResearchService {
         error: run.error,
       })),
       marketData,
+      marketWindow,
       thesis: session.thesis
         ? {
             symbols: [session.symbol ?? 'UNKNOWN'],
@@ -97,6 +110,7 @@ export class ResearchService {
           }
         : null,
       historicalMatches: session.historicalMatches ?? [],
+      findings: session.findings ?? [],
       stressTests: (session.thesis?.stressTests ?? []).map((st) => ({
         symbol: session.symbol ?? 'UNKNOWN',
         name: st.name,

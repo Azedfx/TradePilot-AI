@@ -83,12 +83,12 @@ export class StressTestService {
         multiple: 4.0,
       },
       {
-        name: 'funding-cascade',
-        description: 'Deleveraging liquidation cascade',
+        name: 'leverage-unwind',
+        description: 'Margin-call driven deleveraging cascade',
         multiple: 5.5,
       },
       {
-        name: 'crypto-bear',
+        name: 'bear-market',
         description: 'Sustained bear market drawdown',
         multiple: 8.0,
       },
@@ -131,8 +131,8 @@ export class StressTestService {
     const base = thesis.direction === 'neutral' ? 0.05 : 0.06;
     const scenarios = [
       { name: 'macro-shock', maxDrawdown: -4 * base },
-      { name: 'funding-cascade', maxDrawdown: -5.5 * base },
-      { name: 'crypto-bear', maxDrawdown: -8 * base },
+      { name: 'leverage-unwind', maxDrawdown: -5.5 * base },
+      { name: 'bear-market', maxDrawdown: -8 * base },
     ];
     const worstShock = Math.max(...scenarios.map((m) => m.maxDrawdown));
     return {

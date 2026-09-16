@@ -39,6 +39,7 @@ interface ResearchContextValue {
   recent: ResearchSummary[];
   refreshRecent: () => Promise<void>;
   openSession: (sessionId: string) => Promise<void>;
+  clearSession: () => void;
 }
 
 const ResearchContext = createContext<ResearchContextValue | null>(null);
@@ -71,18 +72,25 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
   const openSession = useCallback(
     async (id: string) => {
       setError(null);
-      setView('home');
       try {
         const s = await getResearch(id);
         setSession(s);
         setSessionId(id);
         setQuestion(s.question);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load session');
+        setError(
+          e instanceof Error ? e.message : 'Failed to load session',
+        );
       }
     },
     [],
   );
+
+  const clearSession = useCallback(() => {
+    setSession(null);
+    setSessionId(null);
+    setError(null);
+  }, []);
 
   const runResearch = useCallback(
     async (q?: string) => {
@@ -143,6 +151,7 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
         recent,
         refreshRecent,
         openSession,
+        clearSession,
       }}
     >
       {children}

@@ -5,10 +5,14 @@ import { McpClientService } from '../market-data/mcp-client.service';
 import { unwrapMcpPayload } from './mcp.util';
 
 /**
- * Sentiment skill - crowd psychology and derivatives positioning.
- * Primary: Bitget datahub MCP `sentiment_index` (Fear & Greed) and
- * `derivatives_sentiment` (long/short, open interest, taker ratio).
- * Fallback: direct Fear & Greed API (keyless).
+ * Sentiment skill - crowd psychology and derivatives positioning. The Fear &
+ * Greed index and futures long/short data behind this skill are crypto-only
+ * concepts (Bitget datahub MCP `sentiment_index` / `derivatives_sentiment`,
+ * both crypto-market metrics) — for US-stock research they don't apply, so
+ * this skill says so explicitly rather than mislabelling a crypto reading as
+ * stock sentiment. Crypto research (when explicitly detected) still uses
+ * them, falling back to the direct Fear & Greed API (keyless) if the MCP is
+ * unavailable.
  */
 @Injectable()
 export class SentimentSkill extends BaseSkill {
@@ -21,6 +25,16 @@ export class SentimentSkill extends BaseSkill {
   private lastSource = 'placeholder';
 
   async run(context: ResearchContext): Promise<SkillResult> {
+    const isStock = context.assetType === 'us-stock';
+
+    if (isStock) {
+      return this.buildResult(
+        'sentiment',
+        `Crypto-specific sentiment metrics (Fear & Greed index, futures long/short positioning) do not apply to US equities; ${context.symbols.join(', ')} sentiment is inferred from news tone and technical momentum elsewhere in this report.`,
+        { fearAndGreed: null, derivatives: [], source: 'not-applicable-for-stocks' },
+      );
+    }
+
     const fearAndGreed = await this.fearAndGreed();
     const derivatives = await this.derivatives(context);
 

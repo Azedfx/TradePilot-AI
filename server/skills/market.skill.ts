@@ -6,9 +6,12 @@ import { MarketDataService } from '../market-data/market-data.service';
 import { parseMcpJson } from './mcp.util';
 
 /**
- * Market skill - market structure and institutional/on-chain activity.
- * Primary: Bitget datahub MCP `crypto_market` (CoinGecko) + `network_status`.
- * Fallback: live Bitget ticker + structured estimates.
+ * Market skill - market structure and institutional/flow activity. This
+ * workbench is US-stock-first: for stock/rToken research it goes straight
+ * to a live quote (Bitget/Yahoo via MarketDataService) rather than a
+ * crypto-market dashboard. Crypto research (when explicitly detected) still
+ * uses the Bitget datahub MCP `crypto_market` (CoinGecko) + `network_status`
+ * on-chain tools.
  */
 @Injectable()
 export class MarketSkill extends BaseSkill {
@@ -22,9 +25,10 @@ export class MarketSkill extends BaseSkill {
   }
 
   async run(context: ResearchContext): Promise<SkillResult> {
-    const globalStats = await this.globalStats(context);
+    const isStock = context.assetType === 'us-stock';
+    const globalStats = await this.globalStats(context, isStock);
     const flows = await this.institutionalFlows(context);
-    const onChain = await this.onChainActivity();
+    const onChain = isStock ? null : await this.onChainActivity();
 
     const data = {
       globalStats,
@@ -35,7 +39,9 @@ export class MarketSkill extends BaseSkill {
 
     return this.buildResult(
       'market',
-      `Assessed market structure, institutional flows and on-chain activity for ${context.symbols.length} symbol(s).`,
+      isStock
+        ? `Assessed market structure and flow activity for ${context.symbols.length} US stock symbol(s).`
+        : `Assessed market structure, institutional flows and on-chain activity for ${context.symbols.length} symbol(s).`,
       data,
     );
   }
@@ -44,32 +50,35 @@ export class MarketSkill extends BaseSkill {
 
   private async globalStats(
     context: ResearchContext,
+    isStock: boolean,
   ): Promise<Record<string, unknown> | null> {
-    try {
-      const text = await this.mcp.callTool(
-        'crypto_market',
-        { action: 'global' },
-        8,
-      );
-      const parsed = parseMcpJson(text);
-      if (parsed && !parsed['error']) {
-        this.lastSource = 'mcp';
-        return parsed as Record<string, unknown>;
+    if (!isStock) {
+      try {
+        const text = await this.mcp.callTool(
+          'crypto_market',
+          { action: 'global' },
+          8,
+        );
+        const parsed = parseMcpJson(text);
+        if (parsed && !parsed['error']) {
+          this.lastSource = 'mcp';
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
-    // Fallback: surface a live quote for the primary researched symbol.
+    // Stock path (and crypto fallback): live quote for the primary symbol.
     try {
-      const lead = context.symbols[0] ?? 'BTC';
+      const lead = context.symbols[0] ?? (isStock ? 'SPY' : 'BTC');
       const ticker = await this.marketData.getTicker(lead);
       if (ticker.last > 0) {
         this.lastSource = 'live-quote';
         return {
           symbol: lead,
           price: ticker.last,
-          change_24h: ticker.last > 0 ? 0 : 0,
+          change_24h: ticker.change24h ?? 0,
           high_24h: ticker.high24h,
           low_24h: ticker.low24h,
           volume_24h: ticker.volume24h,
@@ -96,7 +105,7 @@ export class MarketSkill extends BaseSkill {
         // Structure-level estimates; institutional-grade feeds plug in here.
         etfFlow24h: null,
         exchangeNetFlow24h: null,
-        note: 'Retail/derivatives estimate based on live ticker; ETF/on-chain flow feeds pending.',
+        note: 'Retail/derivatives estimate based on live ticker; deeper flow/positioning data pending.',
       });
     }
     return out;

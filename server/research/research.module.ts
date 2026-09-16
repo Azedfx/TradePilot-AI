@@ -6,9 +6,16 @@ import { SkillsModule } from '../skills/skills.module';
 import { AnalysisModule } from '../analysis/analysis.module';
 import { ReportsModule } from '../reports/reports.module';
 import { MarketDataModule } from '../market-data/market-data.module';
+import { ReviewModule } from '../review/review.module';
 
 @Module({
-  imports: [SkillsModule, AnalysisModule, ReportsModule, MarketDataModule],
+  imports: [
+    SkillsModule,
+    AnalysisModule,
+    ReportsModule,
+    MarketDataModule,
+    ReviewModule,
+  ],
   controllers: [ResearchController],
   providers: [ResearchService, ResearchOrchestrator],
 })

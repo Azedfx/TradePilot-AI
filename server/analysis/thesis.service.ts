@@ -42,6 +42,10 @@ export class ThesisService {
     const catalysts = s.longNote.length ? s.longNote.slice(0, 5) : ['No positive catalyst identified yet'];
     const risks = s.shortNote.length ? s.shortNote.slice(0, 5) : ['Data coverage too thin to identify risks yet'];
 
+    const marketWindowNote = this.marketWindowNote(results);
+    if (marketWindowNote) risks.unshift(marketWindowNote);
+    if (risks.length > 5) risks.length = 5;
+
     return {
       symbols,
       direction,
@@ -203,6 +207,18 @@ export class ThesisService {
         ? `On the downside, ${this.trim(s.shortNote[0])}. `
         : 'The bearish case is not well supported right now. ') +
       'Keep a defined risk level and revisit as new data lands.';
+  }
+
+  /**
+   * Surfaces the macro skill's US-market-hours note (if any) so a research
+   * run on a US stock / rToken proactively flags the 7×24 weekend/overnight
+   * transmission risk in the live thesis, not just in the after-the-fact
+   * self-evolution review.
+   */
+  private marketWindowNote(results: SkillResult[]): string | null {
+    const macro = results.find((r) => r.skill === 'macro');
+    const window = macro?.data?.['usMarketWindow'] as { note?: string | null } | undefined;
+    return window?.note ?? null;
   }
 
   private trim(text: string): string {

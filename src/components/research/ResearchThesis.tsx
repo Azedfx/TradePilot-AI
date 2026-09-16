@@ -2,6 +2,7 @@ import {
   Activity,
   Brain,
   CheckCircle2,
+  Clock,
   History,
   TrendingDown,
   TrendingUp,
@@ -9,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
+import type { MarketWindow } from '@/lib/types';
 
 export function ResearchThesis() {
   const { session } = useResearch();
@@ -91,6 +93,8 @@ export function ResearchThesis() {
             <div className="mt-1 h-px w-7.5 bg-[#39d9b1]" />
           </div>
         </div>
+
+        <MarketWindowBanner window={session?.marketWindow ?? null} symbol={session?.symbol} />
 
         {/* Thesis Cards */}
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -192,6 +196,53 @@ function renderScenarios(
   return (
     <div className="col-span-full rounded-lg border border-dashed border-[#27405e] bg-[#08172a] px-4 py-6 text-center text-[9px] text-[#748aa3]">
       No stress scenarios yet — they are generated after a research run completes.
+    </div>
+  );
+}
+
+/**
+ * Shows the live US-market-hours status for a stock / tokenized rToken
+ * session — the S2 hackathon's core scenario: the underlying NYSE/Nasdaq
+ * session can be closed (nights, weekends) while an rToken keeps pricing
+ * it 7×24 on-chain. Renders nothing for crypto sessions or before a
+ * market-window reading exists.
+ */
+function MarketWindowBanner({
+  window,
+  symbol,
+}: {
+  window: MarketWindow | null | undefined;
+  symbol?: string | null;
+}) {
+  if (!window) return null;
+
+  const label = {
+    regular: 'Regular session · open',
+    'pre-market': 'Pre-market',
+    'after-hours': 'After-hours',
+    'closed-overnight': 'Closed overnight',
+    'closed-weekend': 'Closed for the weekend',
+  }[window.session];
+
+  if (window.isRegularSessionOpen) {
+    return (
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#194a3c] bg-[#062018] px-3 py-2">
+        <Clock size={12} className="shrink-0 text-[#3bdbbc]" />
+        <p className="text-[9px] leading-3.5 text-[#8fd9c4]">
+          <span className="font-semibold">US market: {label}</span> ({window.etClock}) —{' '}
+          {symbol ?? 'this asset'} is trading during standard NYSE/Nasdaq hours.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#5c4a24] bg-[#2a2010] px-3 py-2">
+      <Clock size={12} className="mt-px shrink-0 text-[#f0c25b]" />
+      <p className="text-[9px] leading-3.75 text-[#e3cf9a]">
+        <span className="font-semibold">US market: {label}</span> ({window.etClock}, reopens{' '}
+        {window.nextOpenDescription}) — {window.note}
+      </p>
     </div>
   );
 }

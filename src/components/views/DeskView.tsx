@@ -2,6 +2,7 @@ import { HeroSection } from '../research/HeroSection';
 import { ResearchProgress } from '../research/ResearchProgress';
 import { ResearchSkills } from '../research/ResearchSkills';
 import { ResearchThesis } from '../research/ResearchThesis';
+import { SelfReview } from '../research/SelfReview';
 import { AIConclusion } from '../research/AIConclusion';
 import { useResearch } from '@/lib/research-context';
 
@@ -30,6 +31,10 @@ export function DeskView() {
 
         <div className="p-2">
           <ResearchThesis />
+        </div>
+
+        <div className="p-2">
+          <SelfReview />
         </div>
       </div>
 

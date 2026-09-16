@@ -1,7 +1,7 @@
 {
   "name": "tradepilot-ai",
   "version": "0.1.0",
-  "description": "TradePilot AI - Bitget AI research workbench (Track 3: AI Trading Desk)",
+  "description": "TradePilot AI - Bitget AI Base Camp Hackathon S2, Track 3: AI Trading Desk (AI Research Workbench), sub-theme: Review & Self-Evolution",
   "private": true,
   "scripts": {
     "dev": "concurrently -k -n api,web -c yellow,cyan \"npm run dev:api\" \"npm run dev:web\"",
@@ -11,6 +11,8 @@
     "build:api": "nest build",
     "build:web": "next build",
     "start": "node dist/main.js",
+    "start:api": "node dist/main.js",
+    "start:web": "next start -p ${PORT:-3001}",
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

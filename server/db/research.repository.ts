@@ -72,7 +72,7 @@ export class ResearchRepository {
         data: {
           question: input.question,
           symbol: input.symbol,
-          assetType: input.assetType ?? 'crypto',
+          assetType: input.assetType ?? 'us-stock',
           timeframe: input.timeframe,
           status: ResearchStatus.PENDING,
         },
@@ -302,6 +302,22 @@ export class ResearchRepository {
         },
       }),
     );
+  }
+
+  /**
+   * Recent "review" category findings from other sessions, used to detect
+   * recurring bad-decision patterns across a trader's research history
+   * (self-evolution: has this pattern shown up before, not just this run?).
+   */
+  async findRecentReviewFindings(
+    excludeSessionId: string,
+    limit = 20,
+  ): Promise<PrismaFinding[]> {
+    return this.prisma.finding.findMany({
+      where: { category: 'review', sessionId: { not: excludeSessionId } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
   }
 
   async addMessage(data: {

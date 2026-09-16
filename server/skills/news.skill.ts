@@ -103,10 +103,13 @@ export class NewsSkill extends BaseSkill {
   private async fetchFromRss(
     context: ResearchContext,
   ): Promise<Headline[]> {
-    const articles = await this.marketData.fetchGoogleNews(
-      context.symbols.join(' crypto'),
-      5,
-    );
+    // Append a disambiguating qualifier based on asset type (e.g. so "SOL"
+    // or "COIN" doesn't pull unrelated results) — previously this always
+    // appended "crypto", which biased/broke stock searches (and multi-symbol
+    // joins, since ' crypto' was used as the separator instead of a space).
+    const qualifier = context.assetType === 'us-stock' ? 'stock' : 'crypto';
+    const query = `${context.symbols.join(' ')} ${qualifier}`.trim();
+    const articles = await this.marketData.fetchGoogleNews(query, 5);
     return articles.map((a) => ({
       title: a.title,
       url: a.url,

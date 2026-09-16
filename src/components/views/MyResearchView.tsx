@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
-import { Folder, Check, XCircle, Loader2 } from 'lucide-react';
+import { Folder, Check, XCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { useResearch } from '@/lib/research-context';
 import { AssetLogo } from '../ui/AssetLogo';
 import { NumberBadge } from '../ui/NumberBadge';
+import { ResearchProgress } from '../research/ResearchProgress';
+import { ResearchThesis } from '../research/ResearchThesis';
+import { AIConclusion } from '../research/AIConclusion';
 
 export function MyResearchView() {
-  const { recent, refreshRecent, openSession } = useResearch();
+  const { recent, refreshRecent, openSession, session, clearSession } =
+    useResearch();
 
   useEffect(() => {
     void refreshRecent();
@@ -39,7 +43,21 @@ export function MyResearchView() {
         </div>
 
         <div className="p-3">
-          {recent.length === 0 ? (
+          {session ? (
+            <div className="space-y-2">
+              <button
+                onClick={clearSession}
+                className="flex items-center gap-1.5 text-[9px] font-medium text-[#57d9ff] transition hover:text-[#7fe4ff]"
+              >
+                <ArrowLeft size={10} />
+                Back to list
+              </button>
+
+              <ResearchProgress />
+              <ResearchThesis />
+              <AIConclusion />
+            </div>
+          ) : recent.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#27405e] bg-[#08182a] p-8 text-center">
               <p className="text-[11px] text-[#8ea2b8]">
                 No research sessions yet.

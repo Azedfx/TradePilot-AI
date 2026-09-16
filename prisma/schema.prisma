@@ -38,7 +38,7 @@ model ResearchSession {
   id        String @id @default(uuid()) @db.Uuid
   question  String
   symbol    String?
-  assetType String? @default("crypto")
+  assetType String? @default("us-stock")
   timeframe String?
 
   status ResearchStatus @default(PENDING)

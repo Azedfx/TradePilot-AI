@@ -3,6 +3,7 @@ import type {
   ResearchLaunch,
   ResearchSessionResponse,
   ResearchSummary,
+  ReviewReport,
 } from './types';
 
 /**
@@ -58,6 +59,20 @@ export async function getMarket(
   }
 
   return (await res.json()) as MarketSnapshot | null;
+}
+
+/**
+ * Fetch the self-evolution review report for a completed research session:
+ * bad-decision-pattern detection plus a reusable checklist for the next idea.
+ */
+export async function getReview(sessionId: string): Promise<ReviewReport> {
+  const res = await fetch(`/api/review/${sessionId}`);
+
+  if (!res.ok) {
+    throw new Error(`Review request failed (${res.status})`);
+  }
+
+  return (await res.json()) as ReviewReport;
 }
 
 export const sleep = (ms: number) =>
