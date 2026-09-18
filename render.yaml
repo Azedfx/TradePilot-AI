@@ -18,7 +18,10 @@ services:
       # Set this to the deployed web service's public URL once it exists,
       # e.g. https://tradepilot-web.onrender.com (no trailing slash).
       - key: CORS_ORIGIN
-        sync: false
+        fromService:
+          name: tradepilot-web
+          type: web
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
       # Qwen (Bitget hackathon proxy) — get an API key per the S2 handbook.
       - key: QWEN_API_KEY
         sync: false
@@ -45,7 +48,10 @@ services:
       # exists, e.g. https://tradepilot-api.onrender.com (no trailing slash).
       # Next.js proxies /api/* server-side to this URL (see next.config.mjs).
       - key: BACKEND_URL
-        sync: false
+        fromService:
+          name: tradepilot-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
 
 databases:
   - name: tradepilot-db
