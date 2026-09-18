@@ -1,4 +1,4 @@
-# TradePilot AI — single image: NestJS API (:3000) + Next.js web (:3001)
+# TradePilot AI — single image: Next.js web (:PORT) + NestJS API (:3000)
 # Pass DATABASE_URL (Neon) and optional QWEN_API_KEY at runtime.
 
 # ── build ────────────────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ RUN apt-get update \
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3000
 ENV BACKEND_URL=http://127.0.0.1:3000
 ENV WEB_PORT=3001
 ENV CORS_ORIGIN=http://localhost:3001

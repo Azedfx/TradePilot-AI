@@ -9,8 +9,8 @@ fi
 echo "→ Applying Prisma schema (db push)…"
 ./node_modules/.bin/prisma db push --accept-data-loss
 
-API_PORT="${PORT:-3000}"
-WEB_PORT="${WEB_PORT:-3001}"
+API_PORT=3000
+WEB_PORT="${PORT:-3001}"
 
 echo "→ Starting NestJS API on :${API_PORT}"
 PORT="${API_PORT}" node dist/main.js &
