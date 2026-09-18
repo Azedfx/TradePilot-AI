@@ -5,6 +5,7 @@ import { AssetLogo } from '../ui/AssetLogo';
 import { NumberBadge } from '../ui/NumberBadge';
 import { ResearchProgress } from '../research/ResearchProgress';
 import { ResearchThesis } from '../research/ResearchThesis';
+import { SelfReview } from '../research/SelfReview';
 import { AIConclusion } from '../research/AIConclusion';
 
 export function MyResearchView() {
@@ -55,7 +56,8 @@ export function MyResearchView() {
 
               <ResearchProgress />
               <ResearchThesis />
-              <AIConclusion />
+              <SelfReview />
+              <AIConclusion embedded />
             </div>
           ) : recent.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#27405e] bg-[#08182a] p-8 text-center">
@@ -88,7 +90,9 @@ export function MyResearchView() {
                     </p>
                     <p className="mt-1 text-[8px] text-[#63778f]">
                       {timeAgo(r.createdAt)}
-                      {r.confidence != null ? ` · ${Math.round(r.confidence * 100)}% confidence` : ''}
+                      {r.confidence != null
+                        ? ` · ${Math.round(r.confidence * 100)}% confidence`
+                        : ''}
                     </p>
                   </div>
 

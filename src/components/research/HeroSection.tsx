@@ -73,7 +73,8 @@ export function HeroSection() {
               }
             }}
             disabled={running}
-            className="h-10 flex-1 resize-none bg-transparent text-[10px] leading-3.75 text-[#d7e4f3] outline-none"
+            placeholder="Ask a research question… e.g. Should I buy NVDA ahead of earnings?"
+            className="h-10 flex-1 resize-none bg-transparent text-[10px] leading-3.75 text-[#d7e4f3] outline-none placeholder:text-[#5f7189]"
           />
 
           <button

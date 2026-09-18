@@ -90,8 +90,8 @@ export class ReportService {
       id: crypto.randomUUID(),
       sessionId,
       title: `Research report: ${context.symbols.join(', ')}`,
-      markdown,
-      summary: thesis.rationale,
+      markdown: sanitizeText(markdown),
+      summary: sanitizeText(thesis.rationale),
       generatedAt: new Date().toISOString(),
     };
   }
@@ -209,4 +209,9 @@ export class ReportService {
     lines.push(`_Generated ${new Date().toISOString()}_`);
     return lines.join('\n');
   }
+}
+
+/** Strip C0 control chars (except newline/tab) so JSON serialization stays valid. */
+function sanitizeText(value: string): string {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 }

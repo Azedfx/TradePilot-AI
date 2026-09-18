@@ -81,6 +81,10 @@ export function ResearchSkills() {
               session?.skills.find((s) => s.skillName === skill.key)
                 ?.durationMs ?? null
             }
+            summary={
+              session?.skills.find((s) => s.skillName === skill.key)?.summary ??
+              null
+            }
           />
         ))}
       </div>
@@ -92,10 +96,12 @@ function SkillCard({
   skill,
   state,
   durationMs,
+  summary,
 }: {
   skill: { name: string; description: string; icon: ReactNode };
   state: 'done' | 'active' | 'pending' | 'idle';
   durationMs: number | null;
+  summary?: string | null;
 }) {
   const active = state === 'active';
 
@@ -119,25 +125,33 @@ function SkillCard({
   }[state];
 
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-[#0b1d31]">
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-          active ? 'bg-[#466fff] text-white' : 'bg-[#28364e] text-[#a0b3cc]'
-        }`}
-      >
-        {skill.icon}
+    <div className="rounded-lg px-3 py-2.5 transition hover:bg-[#0b1d31]">
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            active ? 'bg-[#466fff] text-white' : 'bg-[#28364e] text-[#a0b3cc]'
+          }`}
+        >
+          {skill.icon}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold text-[#dbe6f3]">{skill.name}</p>
+          <p className="truncate text-[8px] text-[#71869f]">
+            {skill.description}
+          </p>
+        </div>
+
+        <span className={`rounded-md px-2 py-1 text-[7px] font-semibold ${badge.cls}`}>
+          {badge.label}
+        </span>
       </div>
 
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold text-[#dbe6f3]">{skill.name}</p>
-        <p className="truncate text-[8px] text-[#71869f]">
-          {skill.description}
+      {state === 'done' && summary ? (
+        <p className="mt-2 line-clamp-2 pl-11 text-[8px] leading-3 text-[#8fa2b7]">
+          {summary}
         </p>
-      </div>
-
-      <span className={`rounded-md px-2 py-1 text-[7px] font-semibold ${badge.cls}`}>
-        {badge.label}
-      </span>
+      ) : null}
     </div>
   );
 }

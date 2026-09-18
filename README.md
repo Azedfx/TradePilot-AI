@@ -86,6 +86,7 @@ docker compose up -d db
 | GET    | `/api/research/:id`          | Get session status + full details     |
 | GET    | `/api/review/:sessionId`     | Self-evolution review report          |
 | GET    | `/api/review/:sessionId/checklist` | Reusable checklist for the next idea |
+| POST   | `/api/research/:id/decision` | Human accept/reject thesis (Track 3)  |
 | GET    | `/api/market/:symbol`        | Live market snapshot for a symbol     |
 
 Example request:

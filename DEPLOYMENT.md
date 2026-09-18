@@ -57,12 +57,19 @@ If you'd rather use Vercel for the frontend specifically:
 | `BACKEND_URL` | Web | Public URL of the deployed API (used by the `/api/*` rewrite in `next.config.mjs`) |
 | `PORT` | Both | Set automatically by the host; `server/main.ts` and `start:web` both honor it |
 
-## Sanity-check before submitting
+## Docker (single image: API + web)
 
-- Open the deployed web URL and run one full research question end to end
-  (this is the "complete research task" the form asks for).
-- Confirm the self-evolution review panel loads after the run completes.
-- Confirm the browser console/network tab shows `/api/*` calls succeeding
-  (200s), not `ECONNREFUSED`/CORS errors — if you see CORS errors, double
-  check `CORS_ORIGIN` on the API matches the web URL exactly (protocol +
-  host, no trailing slash).
+```bash
+docker build -t tradepilot-ai .
+
+docker run --rm -p 3001:3001 \
+  -e DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" \
+  -e QWEN_API_KEY="your-key" \
+  -e QWEN_BASE_URL="https://hackathon.bitgetops.com/v1" \
+  -e QWEN_MODEL="qwen3.8-max" \
+  -e CORS_ORIGIN="http://localhost:3001" \
+  tradepilot-ai
+```
+
+Open **http://localhost:3001** (Next proxies `/api/*` to the Nest API inside the same container). Port 3000 does not need to be published.
+

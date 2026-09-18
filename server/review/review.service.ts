@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ResearchRepository } from '../db/research.repository';
-import { LlmService } from '../llm/llm.service';
+import { ThesisBias } from '../generated/prisma/client';
 
 export interface ReviewSection {
   heading: string;
@@ -40,55 +40,50 @@ export interface ReviewReport {
   source: 'rules';
 }
 
+interface NormalizedThesis {
+  direction: string;
+  confidence: number;
+  rationale: string;
+  stopLossPct?: number;
+  stressTests: Array<{ maxDrawdown: number; name?: string }>;
+}
+
 @Injectable()
 export class ReviewService {
-  private readonly logger = new Logger(ReviewService.name);
-
-  constructor(
-    private readonly repo: ResearchRepository,
-    private readonly llm: LlmService,
-  ) {}
+  constructor(private readonly repo: ResearchRepository) {}
 
   async review(sessionId: string): Promise<ReviewReport> {
     const session = await this.repo.findSession(sessionId);
     if (!session) throw new NotFoundException(`No research session ${sessionId}`);
 
-    const thesis = (session.thesis ?? null) as unknown as {
-      direction?: string;
-      confidence?: number;
-      rationale?: string;
-      stopLossPct?: number;
-      stressTests?: Array<{ maxDrawdown?: number }>;
-    } | null;
+    const thesis = this.normalizeThesis(session.thesis);
+    const findings = (session.findings ?? []).map((f) => ({
+      category: f.category,
+      title: f.title,
+      statement: f.statement,
+      data: f.data,
+    }));
 
-    const findings = (session.findings ?? []) as unknown as Array<{
-      category?: string;
-      title?: string;
-      statement?: string;
-      data?: unknown;
-    }>;
-
-    const skillsCompleted = 0; // derived below
-    const skills = ((session.skillRuns ?? []) as unknown as Array<{ status?: string }>).filter(
+    const skills = (session.skillRuns ?? []).filter(
       (s) => s.status === 'COMPLETED',
     );
 
-    const planJson = (session.plan?.plan ?? null) as unknown as {
+    const planJson = session.plan?.plan as {
       objective?: string;
       skills?: string[];
       questions?: string[];
-    } | null | string;
-    const plannedSkills = Array.isArray(planJson)
-      ? 0
-      : typeof planJson === 'object' && planJson
-        ? Array.isArray(planJson.skills)
-          ? planJson.skills.length
-          : 0
-        : 0;
-    const planSteps = plannedSkills;
+    } | null;
+    const plannedSkills = Array.isArray(planJson?.skills)
+      ? planJson.skills.length
+      : 0;
 
     const recap = this.composeRecap(thesis);
-    const patterns = this.detectPatterns(thesis, findings, skills.length, plannedSkills);
+    const patterns = this.detectPatterns(
+      thesis,
+      findings,
+      skills.length,
+      plannedSkills,
+    );
     const recurring = await this.findRecurring(sessionId, patterns);
     const checklist = this.buildChecklist(patterns);
 
@@ -100,8 +95,6 @@ export class ReviewService {
       skills.length,
       recurring,
     );
-
-    const source = 'rules';
 
     await this.repo.saveFinding({
       sessionId,
@@ -120,15 +113,58 @@ export class ReviewService {
       recurring,
       checklist,
       markdown,
-      source,
+      source: 'rules',
     };
+  }
+
+  /**
+   * Map Prisma thesis + stress-test rows into the shape the pattern
+   * detectors expect. The DB stores bias/summary/worstCase (fractions);
+   * detectors want direction/rationale/maxDrawdown (percent).
+   */
+  private normalizeThesis(
+    thesis: {
+      bias: ThesisBias;
+      confidence: number;
+      summary: string;
+      stressTests?: Array<{
+        name: string;
+        worstCase: number | null;
+        aiAnalysis: string | null;
+      }>;
+    } | null,
+  ): NormalizedThesis | null {
+    if (!thesis) return null;
+
+    const stressTests = (thesis.stressTests ?? []).map((st) => ({
+      name: st.name,
+      // worstCase is a signed fraction (e.g. -0.18); expose as positive %
+      maxDrawdown: Math.abs(st.worstCase ?? 0) * 100,
+    }));
+
+    const recommendation =
+      thesis.stressTests?.find((st) => st.aiAnalysis)?.aiAnalysis ?? '';
+    const stopMatch = /stop at\s+([\d.]+)\s*%/i.exec(recommendation);
+    const stopLossPct = stopMatch ? Number(stopMatch[1]) : undefined;
+
+    return {
+      direction: this.biasToDirection(thesis.bias),
+      confidence: thesis.confidence,
+      rationale: thesis.summary,
+      stopLossPct: Number.isFinite(stopLossPct) ? stopLossPct : undefined,
+      stressTests,
+    };
+  }
+
+  private biasToDirection(bias: ThesisBias): string {
+    if (bias === ThesisBias.BULLISH) return 'long';
+    if (bias === ThesisBias.BEARISH) return 'short';
+    return 'neutral';
   }
 
   /**
    * Cross-session self-evolution check: of the patterns flagged in *this*
    * run, which ones also showed up in the trader's recent past reviews?
-   * That repetition — not the single-session flag — is the actionable
-   * "iterate your research framework" signal.
    */
   private async findRecurring(
     sessionId: string,
@@ -167,13 +203,7 @@ export class ReviewService {
   }
 
   private detectPatterns(
-    thesis: {
-      direction?: string;
-      confidence?: number;
-      rationale?: string;
-      stopLossPct?: number;
-      stressTests?: Array<{ maxDrawdown?: number }>;
-    } | null,
+    thesis: NormalizedThesis | null,
     findings: Array<{ category?: string; title?: string; statement?: string; data?: unknown }>,
     skillsCompleted: number,
     plannedSkills: number,
@@ -184,16 +214,17 @@ export class ReviewService {
     const rationale = thesis?.rationale ?? '';
     const macroHungry = /rate|inflation|fed|geopolit|macro|dxy|yield/i.test(rationale);
     const macroFinding = findings.find((f) => f.category === 'macro');
-    // A macro finding always exists with *some* sentence (even a "could not
-    // be refreshed from live sources" fallback) — so "has evidence" must
-    // mean the macro skill actually got live data, not merely that a
-    // finding row exists.
     const hasMacroEvidence = Boolean(
       macroFinding?.statement &&
         !/could not be refreshed|unavailable|no fresh headlines/i.test(macroFinding.statement),
     );
 
-    if (thesis && thesis.stopLossPct && worstDrawdown > 0 && thesis.stopLossPct < worstDrawdown) {
+    if (
+      thesis &&
+      thesis.stopLossPct != null &&
+      worstDrawdown > 0 &&
+      thesis.stopLossPct < worstDrawdown
+    ) {
       patterns.push({
         id: 'stop-tighter-than-drawdown',
         message: `Suggested stop ${thesis.stopLossPct.toFixed(1)}% is TIGHTER than the worst-case stress drawdown ${worstDrawdown.toFixed(1)}% — the stop gets shaken out before the downside resolves.`,
@@ -226,6 +257,13 @@ export class ReviewService {
       });
     }
 
+    if (thesis && thesis.confidence >= 0.8 && skillsCompleted < 4) {
+      patterns.push({
+        id: 'high-confidence-thin-coverage',
+        message: `Confidence is ${(thesis.confidence * 100).toFixed(0)}% but only ${skillsCompleted} skills completed — high conviction on thin coverage is a recurring bad-decision pattern.`,
+      });
+    }
+
     return patterns;
   }
 
@@ -249,7 +287,7 @@ export class ReviewService {
         check: 'Is the macro premise backed by live macro evidence?',
         why: 'Macro-leaning theses need a verified statement, not a vibe.',
       });
-    if (patterns.some((p) => p.id === 'skills-coverage-gap'))
+    if (patterns.some((p) => p.id === 'skills-coverage-gap' || p.id === 'high-confidence-thin-coverage'))
       list.push({
         check: 'Are all planned skills completed before locking confidence?',
         why: 'Partial coverage skews the thesis.',
@@ -257,19 +295,14 @@ export class ReviewService {
     return list;
   }
 
-  private composeRecap(thesis: {
-    direction?: string;
-    confidence?: number;
-    rationale?: string;
-    stopLossPct?: number;
-    stressTests?: Array<{ maxDrawdown?: number }>;
-  } | null): string {
+  private composeRecap(thesis: NormalizedThesis | null): string {
     if (!thesis) return 'No thesis produced — review is limited to skill coverage.';
     const stress = thesis.stressTests ?? [];
     const worst = stress.reduce((m, s) => Math.max(m, s.maxDrawdown ?? 0), 0);
     return (
-      `Direction ${thesis.direction ?? 'neutral'} · confidence ${thesis.confidence != null ? Math.round(thesis.confidence * 100) + '%' : 'n/a'}` +
-      (worst > 0 ? ` · worst-case stress drawdown ${worst.toFixed(1)}%` : '')
+      `Direction ${thesis.direction} · confidence ${Math.round(thesis.confidence * 100)}%` +
+      (worst > 0 ? ` · worst-case stress drawdown ${worst.toFixed(1)}%` : '') +
+      (thesis.stopLossPct != null ? ` · suggested stop ${thesis.stopLossPct.toFixed(1)}%` : '')
     );
   }
 

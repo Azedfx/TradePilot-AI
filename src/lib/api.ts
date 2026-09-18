@@ -75,5 +75,26 @@ export async function getReview(sessionId: string): Promise<ReviewReport> {
   return (await res.json()) as ReviewReport;
 }
 
+/**
+ * Persist the trader's final call on a completed thesis
+ * (Track 3: AI assists, human decides).
+ */
+export async function submitDecision(
+  sessionId: string,
+  decision: 'accepted' | 'rejected',
+): Promise<{ sessionId: string; decision: string }> {
+  const res = await fetch(`/api/research/${sessionId}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Decision request failed (${res.status})`);
+  }
+
+  return (await res.json()) as { sessionId: string; decision: string };
+}
+
 export const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));

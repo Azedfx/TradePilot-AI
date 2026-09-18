@@ -4,6 +4,7 @@ import { ResearchProgress } from '../research/ResearchProgress';
 import { ResearchSkills } from '../research/ResearchSkills';
 import { AssetNavigation } from '../research/AssetNavigation';
 import { ResearchThesis } from '../research/ResearchThesis';
+import { SelfReview } from '../research/SelfReview';
 import { AIConclusion } from '../research/AIConclusion';
 import { useResearch } from '@/lib/research-context';
 
@@ -40,6 +41,11 @@ export function HomeView() {
           <div className="min-w-0">
             <ResearchThesis />
           </div>
+        </div>
+
+        {/* Self-evolution review — Track 3 sub-theme */}
+        <div className="p-2">
+          <SelfReview />
         </div>
       </div>
 

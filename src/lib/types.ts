@@ -23,13 +23,16 @@ export interface ThesisPayload {
 
 export interface StressScenario {
   name: string;
+  worstCase: number;
   maxDrawdown: number;
-  recoveryMonths: number;
+  recoveryMonths?: number;
 }
 
 export interface StressPayload {
   symbol: string;
-  threat: number;
+  name: string;
+  threat?: number;
+  sampleSize?: number | null;
   scenarios: StressScenario[];
   recommendation: string;
 }
@@ -49,6 +52,27 @@ export interface MarketWindow {
   /** Present (non-null) only when the market is closed — the rToken 7×24
    * transmission note. Null while the regular session is open. */
   note: string | null;
+}
+
+export interface HistoricalStats {
+  symbol: string;
+  interval?: string;
+  period?: { start: string; end: string };
+  returns?: { total?: number; annualized?: number };
+  volatilityAnnualized?: number;
+  maxDrawdown?: number;
+  range?: { high?: number; low?: number };
+  sampleSize?: number;
+  statement?: string;
+}
+
+export interface FindingView {
+  category: string;
+  title: string;
+  statement: string;
+  importance?: string | null;
+  sentiment?: string | null;
+  data?: unknown;
 }
 
 export interface ResearchResponse {
@@ -75,6 +99,7 @@ export interface SkillRunView {
   status: SkillStatus;
   durationMs: number | null;
   error: string | null;
+  summary?: string | null;
 }
 
 export interface ResearchLaunch {
@@ -98,8 +123,12 @@ export interface ResearchSessionResponse extends ResearchResponse {
   symbol: string | null;
   assetType: string | null;
   skills: SkillRunView[];
+  historicalStats?: HistoricalStats[];
   historicalMatches?: unknown[];
+  findings?: FindingView[];
   messages?: unknown[];
+  report?: string | null;
+  decision?: 'accepted' | 'rejected' | null;
 }
 
 export interface ReusableChecklistItem {

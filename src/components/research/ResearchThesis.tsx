@@ -168,26 +168,34 @@ function renderScenarios(
     return stressTests.map((st, i) => {
       const s = st as {
         symbol: string;
+        name?: string;
         scenarios: {
           name: string;
           worstCase: number;
+          maxDrawdown?: number;
+          recoveryMonths?: number;
         }[];
         recommendation?: string;
       };
       const sc = s.scenarios?.[0];
-      const drawdown = sc?.worstCase ?? 0;
-      const positive = drawdown >= 0;
-      const title = prettify(sc?.name ?? s.symbol);
+      const drawdown = sc?.maxDrawdown ?? sc?.worstCase ?? 0;
+      const pct = drawdown * 100;
+      const recovery = sc?.recoveryMonths;
+      const title = prettify(sc?.name ?? s.name ?? s.symbol);
       return (
         <ScenarioCard
           key={i}
           title={title}
           subtitle={
-            s.recommendation ? truncateRecommendation(s.recommendation) : 'No guidance generated'
+            s.recommendation
+              ? truncateRecommendation(s.recommendation)
+              : 'No guidance generated'
           }
-          returnValue={`${positive ? '+' : ''}${(drawdown * 100).toFixed(1)}%`}
-          probability={drawdown < 0 ? `${Math.round(Math.abs(drawdown) * 100)}% tail` : 'benign'}
-          positive={positive}
+          returnValue={`${pct.toFixed(1)}%`}
+          probability={
+            recovery != null ? `~${recovery} mo recovery` : 'stress scenario'
+          }
+          danger={drawdown < 0}
         />
       );
     });
@@ -321,8 +329,8 @@ function ThesisMiniCard({
 
 function HistoricalCard() {
   const { session } = useResearch();
-  const matches = session?.historicalMatches;
-  const count = matches?.length ?? 0;
+  const stats = session?.historicalStats ?? [];
+  const primary = stats[0];
 
   return (
     <div className="rounded-lg border border-[#183754] bg-[#09182a] p-3">
@@ -334,41 +342,50 @@ function HistoricalCard() {
         <span className="text-[10px] font-semibold">Historical Context</span>
       </div>
 
-      {count > 0 ? (
+      {primary ? (
         <>
           <p className="text-[9px] font-medium text-[#4ad9ff]">
-            {count} similar historical {count === 1 ? 'event' : 'events'} matched
-            for this run
+            {primary.sampleSize ?? 0} candles ·{' '}
+            {primary.symbol}
           </p>
 
-          <div className="mt-3 grid grid-cols-1 gap-y-2">
-            {matches!.slice(0, 3).map((m, i) => {
-              const match = m as {
-                similarityScore?: number;
-                similarityExplanation?: string | null;
-              };
-              return (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 text-[8px] text-[#8fa2b7]"
-                >
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ca3ff]" />
-                  <span className="truncate">
-                    {match.similarityExplanation ??
-                      `Match with ${Math.round((match.similarityScore ?? 0) * 100)}% similarity`}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="mt-3 space-y-2">
+            {primary.returns?.total != null ? (
+              <HistRow
+                label="Total return"
+                value={`${(primary.returns.total * 100).toFixed(1)}%`}
+              />
+            ) : null}
+            {primary.volatilityAnnualized != null ? (
+              <HistRow
+                label="Ann. volatility"
+                value={`${(primary.volatilityAnnualized * 100).toFixed(1)}%`}
+              />
+            ) : null}
+            {primary.maxDrawdown != null ? (
+              <HistRow
+                label="Max drawdown"
+                value={`${(primary.maxDrawdown * 100).toFixed(1)}%`}
+              />
+            ) : null}
           </div>
         </>
       ) : (
         <p className="text-[9px] leading-3.5 text-[#5f7189]">
           {session?.status === 'COMPLETED'
-            ? 'No historical matches found for this asset.'
+            ? 'No historical distribution available for this asset.'
             : 'Historical context appears after a research run completes.'}
         </p>
       )}
+    </div>
+  );
+}
+
+function HistRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-[8px]">
+      <span className="text-[#8fa2b7]">{label}</span>
+      <span className="font-semibold text-[#c9d6e5]">{value}</span>
     </div>
   );
 }
@@ -434,7 +451,7 @@ function ScenarioCard({
 
       <div className="mt-3 flex items-end justify-between">
         <div>
-          <p className="text-[7px] text-[#71869f]">◉ Median 5D Return</p>
+          <p className="text-[7px] text-[#71869f]">◉ Max drawdown</p>
           <p
             className={`mt-1 text-[14px] font-semibold ${
               positive
@@ -449,7 +466,7 @@ function ScenarioCard({
         </div>
 
         <div className="text-right">
-          <p className="text-[7px] text-[#71869f]">Probability</p>
+          <p className="text-[7px] text-[#71869f]">Recovery</p>
           <p className="mt-1 text-[11px] font-semibold text-[#dce7f3]">
             {probability}
           </p>

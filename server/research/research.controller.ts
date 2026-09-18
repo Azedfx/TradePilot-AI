@@ -20,4 +20,13 @@ export class ResearchController {
   status(@Param('id') id: string) {
     return this.researchService.status(id);
   }
+
+  /** Track 3: human trader makes the final call on the AI thesis. */
+  @Post(':id/decision')
+  decide(
+    @Param('id') id: string,
+    @Body() body: { decision: 'accepted' | 'rejected' },
+  ) {
+    return this.researchService.decide(id, body.decision);
+  }
 }

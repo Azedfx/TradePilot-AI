@@ -161,7 +161,12 @@ export class ResearchOrchestrator {
             thesisId: persistedThesis.id,
             name: scenario.name,
             scenarioType: 'bear',
-            assumptions: {},
+            assumptions: {
+              recoveryMonths: scenario.recoveryMonths,
+              threat: st.threat,
+              symbol: st.symbol,
+            },
+            historicalSampleSize: undefined,
             worstCase: scenario.maxDrawdown,
             aiAnalysis: st.recommendation,
           });
