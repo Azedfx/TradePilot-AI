@@ -56,9 +56,10 @@ COPY --from=build /app/prisma.config.ts ./
 COPY --from=build /app/server/generated ./server/generated
 COPY --from=build /app/next.config.mjs ./
 COPY --from=build /app/tsconfig.json ./
+COPY --from=build /app/scripts ./scripts
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN chmod +x /app/docker-entrypoint.sh \
+RUN chmod +x /app/docker-entrypoint.sh /app/scripts/start-render.sh \
   && chown -R tradepilot:tradepilot /app
 
 USER tradepilot

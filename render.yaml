@@ -1,27 +1,25 @@
 services:
+  # Single web service: Next.js on Render's $PORT, NestJS API on :3000.
+  # Browser hits the root URL for the dashboard; Next rewrites /api/* to Nest.
   - type: web
-    name: tradepilot-api
+    name: tradepilot-ai
     runtime: node
     plan: free
     region: oregon
-    buildCommand: pnpm install && pnpm exec prisma generate && pnpm run build:api
-    startCommand: pnpm exec prisma db push --accept-data-loss && pnpm run start:api
+    buildCommand: pnpm install && pnpm run build:render
+    startCommand: pnpm run start:render
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: PNPM_VERSION
         value: 9
+      # Baked into Next rewrites at build time — must stay localhost for same-box Nest.
+      - key: BACKEND_URL
+        value: http://127.0.0.1:3000
       - key: DATABASE_URL
         fromDatabase:
           name: tradepilot-db
           property: connectionString
-      # Set this to the deployed web service's public URL once it exists,
-      # e.g. https://tradepilot-web.onrender.com (no trailing slash).
-      - key: CORS_ORIGIN
-        fromService:
-          name: tradepilot-web
-          type: web
-          envVarKey: RENDER_EXTERNAL_HOSTNAME
       # Qwen (Bitget hackathon proxy) — get an API key per the S2 handbook.
       - key: QWEN_API_KEY
         sync: false
@@ -33,25 +31,6 @@ services:
       # fall back to direct APIs (Bitget, Yahoo Finance) if unset/unreachable.
       - key: MCP_URL
         sync: false
-
-  - type: web
-    name: tradepilot-web
-    runtime: node
-    plan: free
-    region: oregon
-    buildCommand: pnpm install && pnpm run build:web
-    startCommand: pnpm run start:web
-    envVars:
-      - key: NODE_VERSION
-        value: 20
-      # Point this at the tradepilot-api service's public URL once it
-      # exists, e.g. https://tradepilot-api.onrender.com (no trailing slash).
-      # Next.js proxies /api/* server-side to this URL (see next.config.mjs).
-      - key: BACKEND_URL
-        fromService:
-          name: tradepilot-api
-          type: web
-          envVarKey: RENDER_EXTERNAL_HOSTNAME
 
 databases:
   - name: tradepilot-db
