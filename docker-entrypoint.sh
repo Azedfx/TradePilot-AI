@@ -11,7 +11,7 @@ echo "→ Applying Prisma schema (db push)…"
 
 API_PORT=3000
 WEB_PORT="${PORT:-3001}"
-[ "$WEB_PORT" = "$API_PORT" ] && WEB_PORT=3001
+if [ "$WEB_PORT" = "$API_PORT" ]; then WEB_PORT=3001; fi
 
 echo "→ Starting NestJS API on :${API_PORT}"
 PORT="${API_PORT}" node dist/main.js &
