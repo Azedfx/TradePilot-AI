@@ -1,6 +1,9 @@
 #!/bin/sh
-# Single-service boot: NestJS API (internal) + Next.js web (public $PORT).
+# Single-service boot: NestJS API (loopback only) + Next.js web (public $PORT).
 # Used by Render (`pnpm run start:render`) and Docker (`docker-entrypoint.sh`).
+#
+# Nest must NOT bind 0.0.0.0 — Render will otherwise treat :3000 as the public
+# HTTP server and mis-route traffic away from Next on $PORT (often 10000).
 set -eu
 
 if [ -z "${DATABASE_URL:-}" ]; then
@@ -30,12 +33,22 @@ if [ "$API_PORT" != "3000" ]; then
   done
 fi
 
-echo "→ Starting NestJS API on :${API_PORT}"
-PORT="${API_PORT}" node dist/main.js &
+echo "→ Starting NestJS API on 127.0.0.1:${API_PORT} (private)"
+HOST=127.0.0.1 PORT="${API_PORT}" node dist/main.js &
 API_PID=$!
 
-echo "→ Starting Next.js web on :${WEB_PORT} (proxy → http://127.0.0.1:${API_PORT})"
-PORT="${WEB_PORT}" ./node_modules/.bin/next start -p "${WEB_PORT}" &
+# Brief wait so Nest is accepting before Next starts proxying /api/*
+i=0
+while [ "$i" -lt 30 ]; do
+  if node -e "fetch('http://127.0.0.1:${API_PORT}/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+
+echo "→ Starting Next.js web on 0.0.0.0:${WEB_PORT} (public; proxy → http://127.0.0.1:${API_PORT})"
+PORT="${WEB_PORT}" ./node_modules/.bin/next start -H 0.0.0.0 -p "${WEB_PORT}" &
 WEB_PID=$!
 
 shutdown() {

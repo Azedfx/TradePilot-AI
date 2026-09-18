@@ -28,7 +28,7 @@ Update that service's settings and redeploy:
 | `PORT` | **unset** (do not set `3000`) |
 | `BACKEND_URL` | `http://127.0.0.1:3000` (needed at **build** and runtime) |
 
-Do not set `PORT=3000` — Nest uses internal `3000`; Next must bind Render's `$PORT`.
+Do not set `PORT=3000` — Nest uses internal `3000` on **loopback only**; Next must bind Render's `$PORT` on `0.0.0.0` so Render routes public traffic to the dashboard.
 
 ## Option B — Split providers (Vercel for web + Render/Railway for API)
 

@@ -6,6 +6,9 @@ import { AppModule } from './app/app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = Number(process.env.PORT) || 3000;
+  // Combined Render/Docker boot binds Nest to loopback so Render only
+  // detects Next on $PORT as the public HTTP server.
+  const host = process.env.HOST || '0.0.0.0';
 
   app.setGlobalPrefix('api');
   const corsOrigin =
@@ -19,8 +22,11 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(port);
-  Logger.log(`TradePilot backend running on http://localhost:${port}/api`, 'Bootstrap');
+  await app.listen(port, host);
+  Logger.log(
+    `TradePilot backend running on http://${host}:${port}/api`,
+    'Bootstrap',
+  );
 }
 
 void bootstrap();
