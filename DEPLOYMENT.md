@@ -16,18 +16,9 @@ prefer them — the important part is the order of operations below.
    - `tradepilot-api` (NestJS, runs `prisma db push` on boot to apply the schema)
    - `tradepilot-web` (Next.js)
 3. Render will prompt for the env vars marked `sync: false` before the
-   first deploy. You can leave `CORS_ORIGIN` and `BACKEND_URL` blank for now
-   — see step 5.
-4. Set the Qwen credentials on `tradepilot-api` (from the S2 handbook /
-   Qwen Token application):
-   - `QWEN_API_KEY` — required for real LLM responses (without it the app
-     runs on a deterministic placeholder, which still works but isn't what
-     you want for the demo).
-   - `QWEN_BASE_URL` / `QWEN_MODEL` are already set in `render.yaml`.
-5. Once both services have deployed once, cross-wire their public URLs
-   (Render assigns them at first deploy, e.g. `https://tradepilot-api-xxxx.onrender.com`):
-   - On `tradepilot-api`, set `CORS_ORIGIN` to the `tradepilot-web` URL.
-   - On `tradepilot-web`, set `BACKEND_URL` to the `tradepilot-api` URL.
+    first deploy. Only `QWEN_API_KEY` and `MCP_URL` need to be set.
+    `CORS_ORIGIN` and `BACKEND_URL` are automatically wired between
+    services via `fromService`.
    - Trigger a manual redeploy of both so the env vars take effect.
 6. Visit the `tradepilot-web` URL — that's your Accessible Demo link for
    the submission form.
