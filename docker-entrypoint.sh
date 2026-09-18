@@ -7,7 +7,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "→ Applying Prisma schema (db push)…"
-./node_modules/.bin/prisma db push --skip-generate --accept-data-loss
+./node_modules/.bin/prisma db push --accept-data-loss
 
 API_PORT="${PORT:-3000}"
 WEB_PORT="${WEB_PORT:-3001}"
