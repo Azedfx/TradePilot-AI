@@ -9,15 +9,23 @@ fi
 echo "→ Applying Prisma schema (db push)…"
 ./node_modules/.bin/prisma db push --accept-data-loss
 
-API_PORT=3000
 WEB_PORT="${PORT:-3001}"
-if [ "$WEB_PORT" = "$API_PORT" ]; then WEB_PORT=3001; fi
+API_PORT=3000
+if [ "$API_PORT" = "$WEB_PORT" ]; then API_PORT=3002; fi
+
+# Update rewrite URLs if API port differs from default 3000
+if [ "$API_PORT" != "3000" ]; then
+  sed -i "s|http://localhost:3000|http://127.0.0.1:${API_PORT}|g" .next/required-server-files.json 2>/dev/null
+  sed -i "s|http://127.0.0.1:3000|http://127.0.0.1:${API_PORT}|g" .next/required-server-files.json 2>/dev/null
+  sed -i "s|http://localhost:3000|http://127.0.0.1:${API_PORT}|g" .next/routes-manifest.json 2>/dev/null
+  sed -i "s|http://127.0.0.1:3000|http://127.0.0.1:${API_PORT}|g" .next/routes-manifest.json 2>/dev/null
+fi
 
 echo "→ Starting NestJS API on :${API_PORT}"
 PORT="${API_PORT}" node dist/main.js &
 API_PID=$!
 
-echo "→ Starting Next.js web on :${WEB_PORT} (proxy → ${BACKEND_URL:-http://127.0.0.1:3000})"
+echo "→ Starting Next.js web on :${WEB_PORT} (proxy → http://127.0.0.1:${API_PORT})"
 PORT="${WEB_PORT}" ./node_modules/.bin/next start -p "${WEB_PORT}" &
 WEB_PID=$!
 
