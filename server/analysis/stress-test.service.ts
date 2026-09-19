@@ -7,6 +7,7 @@ export interface StressResult {
   threat: number; // 0..1 likelihood-adjusted severity
   scenarios: {
     name: string;
+    description: string;
     maxDrawdown: number;
     recoveryMonths: number;
   }[];
@@ -98,6 +99,7 @@ export class StressTestService {
       const shocked = Math.min(0.9, s.multiple * v);
       return {
         name: s.name,
+        description: s.description,
         maxDrawdown: -shocked,
         recoveryMonths: Math.max(
           1,
@@ -130,9 +132,21 @@ export class StressTestService {
   ): StressResult {
     const base = thesis.direction === 'neutral' ? 0.05 : 0.06;
     const scenarios = [
-      { name: 'macro-shock', maxDrawdown: -4 * base },
-      { name: 'leverage-unwind', maxDrawdown: -5.5 * base },
-      { name: 'bear-market', maxDrawdown: -8 * base },
+      {
+        name: 'macro-shock',
+        description: 'Liquidity-driven risk-off correction',
+        maxDrawdown: -4 * base,
+      },
+      {
+        name: 'leverage-unwind',
+        description: 'Margin-call driven deleveraging cascade',
+        maxDrawdown: -5.5 * base,
+      },
+      {
+        name: 'bear-market',
+        description: 'Sustained bear market drawdown',
+        maxDrawdown: -8 * base,
+      },
     ];
     const worstShock = Math.max(...scenarios.map((m) => m.maxDrawdown));
     return {
@@ -140,6 +154,7 @@ export class StressTestService {
       threat: Math.min(0.9, Math.abs(worstShock) * (1 - thesis.confidence) * 1.4),
       scenarios: scenarios.map((m) => ({
         name: m.name,
+        description: m.description,
         maxDrawdown: m.maxDrawdown,
         recoveryMonths: (1 - thesis.confidence) > 0.4 ? 6 : 3,
       })),

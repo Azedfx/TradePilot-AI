@@ -1,3 +1,5 @@
+'use client';
+
 import {
   ArrowLeft,
   BarChart3,
@@ -9,18 +11,127 @@ import {
   Newspaper,
   Sparkles,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AssetLogo } from '../ui/AssetLogo';
 import { useResearch } from '@/lib/research-context';
 
+export type DeskSectionId =
+  | 'overview'
+  | 'thesis'
+  | 'market'
+  | 'news'
+  | 'technical'
+  | 'historical'
+  | 'stress'
+  | 'review'
+  | 'sources';
+
+const NAV: {
+  id: DeskSectionId;
+  label: string;
+  icon: ReactNode;
+  /** DOM id to scroll to */
+  target: string;
+  /** Optional Research Skills panel key to expand */
+  skillKey?: string;
+}[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    icon: <Sparkles size={13} />,
+    target: 'section-overview',
+  },
+  {
+    id: 'thesis',
+    label: 'Thesis',
+    icon: <Brain size={13} />,
+    target: 'section-thesis',
+  },
+  {
+    id: 'market',
+    label: 'Market Analysis',
+    icon: <BarChart3 size={13} />,
+    target: 'section-skills',
+    skillKey: 'market',
+  },
+  {
+    id: 'news',
+    label: 'News & Sentiment',
+    icon: <Newspaper size={13} />,
+    target: 'section-skills',
+    skillKey: 'news',
+  },
+  {
+    id: 'technical',
+    label: 'Technical Analysis',
+    icon: <LineChart size={13} />,
+    target: 'section-skills',
+    skillKey: 'technical',
+  },
+  {
+    id: 'historical',
+    label: 'Historical Scenarios',
+    icon: <History size={13} />,
+    target: 'section-historical',
+  },
+  {
+    id: 'stress',
+    label: 'Stress Testing',
+    icon: <Gauge size={13} />,
+    target: 'section-stress',
+  },
+  {
+    id: 'review',
+    label: 'Self-Evolution Review',
+    icon: <Sparkles size={13} />,
+    target: 'section-review',
+  },
+  {
+    id: 'sources',
+    label: 'Sources & References',
+    icon: <BookOpen size={13} />,
+    target: 'section-sources',
+  },
+];
+
+export const OPEN_SKILL_EVENT = 'tradepilot:open-skill';
+
+function scrollToSection(targetId: string) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.classList.add('ring-1', 'ring-[#29b7ed]/50');
+  window.setTimeout(() => {
+    el.classList.remove('ring-1', 'ring-[#29b7ed]/50');
+  }, 1200);
+}
+
 export function AssetNavigation() {
-  const { session } = useResearch();
+  const { session, clearSession } = useResearch();
   const md = session?.marketData;
+  const [active, setActive] = useState<DeskSectionId>('overview');
+
+  const go = (item: (typeof NAV)[number]) => {
+    setActive(item.id);
+    scrollToSection(item.target);
+    if (item.skillKey) {
+      window.dispatchEvent(
+        new CustomEvent(OPEN_SKILL_EVENT, { detail: { skillKey: item.skillKey } }),
+      );
+    }
+  };
 
   return (
     <section className="relative rounded-lg border border-[#173552] bg-[#071424]">
       <div className="p-3">
-        <button className="mb-4 flex items-center gap-2 text-[9px] text-[#8195ac]">
+        <button
+          type="button"
+          onClick={() => {
+            clearSession();
+            scrollToSection('section-hero');
+          }}
+          className="mb-4 flex cursor-pointer items-center gap-2 text-[9px] text-[#8195ac] transition hover:text-[#57d9ff]"
+        >
           <ArrowLeft size={12} />
           Back to Research
         </button>
@@ -31,11 +142,11 @@ export function AssetNavigation() {
           <div>
             <p className="text-[14px] font-semibold">{session?.symbol ?? '—'}</p>
             <p className="text-[8px] text-[#73869e]">
-              {md
-                ? md.assetType === 'us-stock'
+              {session
+                ? md?.assetType === 'us-stock' || !md
                   ? 'US Stock / rToken'
                   : 'US Stock'
-                : '—'}
+                : 'No session yet'}
             </p>
             <p className="mt-1 text-[11px] font-semibold">
               {md
@@ -54,16 +165,17 @@ export function AssetNavigation() {
           </div>
         </div>
 
-        <div className="space-y-1">
-          <AssetNavItem icon={<Sparkles size={13} />} label="Overview" active />
-          <AssetNavItem icon={<Brain size={13} />} label="Thesis" />
-          <AssetNavItem icon={<BarChart3 size={13} />} label="Market Analysis" />
-          <AssetNavItem icon={<Newspaper size={13} />} label="News & Sentiment" />
-          <AssetNavItem icon={<LineChart size={13} />} label="Technical Analysis" />
-          <AssetNavItem icon={<History size={13} />} label="Historical Scenarios" />
-          <AssetNavItem icon={<Gauge size={13} />} label="Stress Testing" />
-          <AssetNavItem icon={<BookOpen size={13} />} label="Sources & References" />
-        </div>
+        <nav className="space-y-1" aria-label="Research sections">
+          {NAV.map((item) => (
+            <AssetNavItem
+              key={item.id}
+              icon={item.icon}
+              label={item.label}
+              active={active === item.id}
+              onClick={() => go(item)}
+            />
+          ))}
+        </nav>
       </div>
     </section>
   );
@@ -73,17 +185,21 @@ function AssetNavItem({
   icon,
   label,
   active = false,
+  onClick,
 }: {
   icon: ReactNode;
   label: string;
   active?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
-      className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 ${
+      type="button"
+      onClick={onClick}
+      className={`flex w-full cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition ${
         active
           ? 'bg-[#163351] text-[#54d8ff]'
-          : 'text-[#879bb1] hover:bg-[#0b1d31]'
+          : 'text-[#879bb1] hover:bg-[#0b1d31] hover:text-[#c5d6e8]'
       }`}
     >
       {icon}

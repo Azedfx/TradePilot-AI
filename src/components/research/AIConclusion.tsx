@@ -137,7 +137,10 @@ export function AIConclusion({
       </section>
 
       {/* Evidence */}
-      <section className="relative border-b border-[#17324d] p-5">
+      <section
+        id="section-sources"
+        className="relative scroll-mt-16 border-b border-[#17324d] p-5"
+      >
         <NumberBadge number="8" />
 
         <div className="mb-4 flex items-center gap-2">

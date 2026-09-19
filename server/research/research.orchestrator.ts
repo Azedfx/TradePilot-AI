@@ -165,6 +165,7 @@ export class ResearchOrchestrator {
               recoveryMonths: scenario.recoveryMonths,
               threat: st.threat,
               symbol: st.symbol,
+              description: scenario.description,
             },
             historicalSampleSize: undefined,
             worstCase: scenario.maxDrawdown,

@@ -23,6 +23,7 @@ export interface ThesisPayload {
 
 export interface StressScenario {
   name: string;
+  description?: string;
   worstCase: number;
   maxDrawdown: number;
   recoveryMonths?: number;
@@ -136,6 +137,11 @@ export interface ReusableChecklistItem {
   why: string;
 }
 
+export interface ReviewPatternFlag {
+  id: string;
+  message: string;
+}
+
 export interface RecurringPattern {
   id: string;
   message: string;
@@ -149,8 +155,11 @@ export interface ReviewReport {
   title: string;
   recap: string;
   badPatterns: string[];
+  patterns?: ReviewPatternFlag[];
   recurring: RecurringPattern[];
   checklist: ReusableChecklistItem[];
   markdown: string;
   source: 'rules';
+  skillsCompleted?: number;
+  plannedSkills?: number;
 }

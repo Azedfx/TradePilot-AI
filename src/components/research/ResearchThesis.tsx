@@ -38,7 +38,10 @@ export function ResearchThesis() {
   const done = session?.status === 'COMPLETED';
 
   return (
-    <section className="relative rounded-lg border border-[#173957] bg-[#071424]">
+    <section
+      id="section-thesis"
+      className="relative scroll-mt-16 rounded-lg border border-[#173957] bg-[#071424]"
+    >
       <div className="p-5">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
@@ -134,7 +137,10 @@ export function ResearchThesis() {
         </div>
 
         {/* Stress Testing */}
-        <section className="relative mt-3 rounded-lg border border-[#153653] bg-[#08172a] p-4">
+        <section
+          id="section-stress"
+          className="relative mt-3 scroll-mt-16 rounded-lg border border-[#153653] bg-[#08172a] p-4"
+        >
           <NumberBadge number="6" />
 
           <div className="mb-3">
@@ -155,6 +161,12 @@ export function ResearchThesis() {
           <div className="grid gap-3 md:grid-cols-3">
             {renderScenarios(session?.stressTests)}
           </div>
+
+          {session?.stressTests?.[0]?.recommendation ? (
+            <p className="mt-3 text-[8px] leading-3.5 text-[#7e94ae]">
+              {session.stressTests[0].recommendation}
+            </p>
+          ) : null}
         </section>
       </div>
     </section>
@@ -171,6 +183,7 @@ function renderScenarios(
         name?: string;
         scenarios: {
           name: string;
+          description?: string;
           worstCase: number;
           maxDrawdown?: number;
           recoveryMonths?: number;
@@ -181,19 +194,22 @@ function renderScenarios(
       const drawdown = sc?.maxDrawdown ?? sc?.worstCase ?? 0;
       const pct = drawdown * 100;
       const recovery = sc?.recoveryMonths;
-      const title = prettify(sc?.name ?? s.name ?? s.symbol);
+      const scenarioKey = sc?.name ?? s.name ?? '';
+      const title = prettify(scenarioKey || s.symbol);
+      const subtitle =
+        sc?.description?.trim() ||
+        scenarioDescription(scenarioKey) ||
+        'Downside scenario sized from live volatility';
       return (
         <ScenarioCard
           key={i}
           title={title}
-          subtitle={
-            s.recommendation
-              ? truncateRecommendation(s.recommendation)
-              : 'No guidance generated'
-          }
-          returnValue={`${pct.toFixed(1)}%`}
-          probability={
-            recovery != null ? `~${recovery} mo recovery` : 'stress scenario'
+          subtitle={subtitle}
+          returnValue={`${pct <= 0 ? '' : '+'}${pct.toFixed(1)}%`}
+          recovery={
+            recovery != null
+              ? `~${recovery} month${recovery === 1 ? '' : 's'}`
+              : 'n/a'
           }
           danger={drawdown < 0}
         />
@@ -262,9 +278,15 @@ function prettify(name: string): string {
     .join(' ');
 }
 
-function truncateRecommendation(s: string): string {
-  const max = 64;
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+/** Fallback copy for older sessions that did not persist scenario descriptions. */
+function scenarioDescription(name: string): string {
+  const key = name.toLowerCase();
+  const map: Record<string, string> = {
+    'macro-shock': 'Liquidity-driven risk-off correction',
+    'leverage-unwind': 'Margin-call driven deleveraging cascade',
+    'bear-market': 'Sustained bear market drawdown',
+  };
+  return map[key] ?? '';
 }
 
 function ThesisMiniCard({
@@ -333,7 +355,10 @@ function HistoricalCard() {
   const primary = stats[0];
 
   return (
-    <div className="rounded-lg border border-[#183754] bg-[#09182a] p-3">
+    <div
+      id="section-historical"
+      className="scroll-mt-16 rounded-lg border border-[#183754] bg-[#09182a] p-3"
+    >
       <div className="mb-3 flex items-center gap-2">
         <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#253c76] text-[#7ca3ff]">
           <History size={14} />
@@ -394,14 +419,14 @@ function ScenarioCard({
   title,
   subtitle,
   returnValue,
-  probability,
+  recovery,
   positive,
   danger,
 }: {
   title: string;
   subtitle: string;
   returnValue: string;
-  probability: string;
+  recovery: string;
   positive?: boolean;
   danger?: boolean;
 }) {
@@ -447,11 +472,11 @@ function ScenarioCard({
         </span>
       </div>
 
-      <p className="text-[7px] text-[#778ba2]">{subtitle}</p>
+      <p className="min-h-8 text-[8px] leading-3.25 text-[#778ba2]">{subtitle}</p>
 
-      <div className="mt-3 flex items-end justify-between">
+      <div className="mt-3 flex items-end justify-between gap-2">
         <div>
-          <p className="text-[7px] text-[#71869f]">◉ Max drawdown</p>
+          <p className="text-[7px] text-[#71869f]">Max drawdown</p>
           <p
             className={`mt-1 text-[14px] font-semibold ${
               positive
@@ -466,9 +491,9 @@ function ScenarioCard({
         </div>
 
         <div className="text-right">
-          <p className="text-[7px] text-[#71869f]">Recovery</p>
+          <p className="text-[7px] text-[#71869f]">Est. time to recover</p>
           <p className="mt-1 text-[11px] font-semibold text-[#dce7f3]">
-            {probability}
+            {recovery}
           </p>
         </div>
       </div>

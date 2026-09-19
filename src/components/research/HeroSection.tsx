@@ -27,7 +27,10 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative min-h-81 overflow-hidden rounded-lg border border-[#173b5c] bg-[radial-gradient(circle_at_72%_45%,rgba(12,76,120,.24),transparent_32%),linear-gradient(135deg,#061a30,#03101f)]">
+    <section
+      id="section-hero"
+      className="relative min-h-81 scroll-mt-16 overflow-hidden rounded-lg border border-[#173b5c] bg-[radial-gradient(circle_at_72%_45%,rgba(12,76,120,.24),transparent_32%),linear-gradient(135deg,#061a30,#03101f)]"
+    >
       {/* Decorative lines */}
       <div className="pointer-events-none absolute -right-12.5 -top-12.5 h-82.5 w-107.5 opacity-40">
         <div className="absolute inset-0 rounded-full border border-[#12476a]" />

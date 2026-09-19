@@ -200,6 +200,7 @@ export class ResearchService {
         const assumptions = (st.assumptions ?? {}) as {
           recoveryMonths?: number;
           threat?: number;
+          description?: string;
         };
         const worst = st.worstCase ?? 0;
         return {
@@ -210,6 +211,7 @@ export class ResearchService {
           scenarios: [
             {
               name: st.name,
+              description: assumptions.description,
               worstCase: worst,
               maxDrawdown: worst,
               recoveryMonths: assumptions.recoveryMonths,

@@ -6,14 +6,14 @@ import {
 } from 'lucide-react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
-import { SkillStatus } from '@/lib/types';
+import type { SkillStatus } from '@/lib/types';
 
 const STEPS: { label: string; label2: string; skills?: string[] }[] = [
   { label: 'Understanding', label2: 'Your Question' },
   { label: 'Analyzing', label2: 'News & Sentiment', skills: ['news', 'sentiment'] },
   { label: 'Checking', label2: 'Market Conditions', skills: ['market'] },
   { label: 'Technical', label2: 'Analysis', skills: ['technical'] },
-  { label: 'Historical', label2: 'Scenarios', skills: ['macro'] },
+  { label: 'Macro', label2: 'Environment', skills: ['macro'] },
   { label: 'Building', label2: 'Your Thesis' },
 ];
 
@@ -30,34 +30,62 @@ type StepState = 'done' | 'active' | 'pending' | 'idle';
 
 export function ResearchProgress() {
   const { session, running } = useResearch();
+  const complete = session?.status === 'COMPLETED';
+  const failed = session?.status === 'FAILED';
+  const finished = complete || failed;
 
   const skillStatus = (name: string): SkillStatus | undefined =>
     session?.skills.find((s) => s.skillName === name)?.status;
 
   const hasSkills = !!session?.skills.length;
+  // Planning is done once we have a session past PENDING, any skills, or a finished run.
+  const planDone =
+    finished ||
+    hasSkills ||
+    session?.status === 'PLANNING' ||
+    session?.status === 'RESEARCHING' ||
+    session?.status === 'ANALYZING' ||
+    Boolean(session?.question);
 
   const stepState = (
     index: number,
     skills?: string[],
   ): StepState => {
+    if (finished) return 'done';
+
     if (index === 0) {
-      return hasSkills ? 'done' : running ? 'active' : 'idle';
+      if (planDone && hasSkills) return 'done';
+      if (running || session) return 'active';
+      return 'idle';
     }
+
     if (index === 5) {
-      if (session?.status === 'COMPLETED') return 'done';
       if (session?.status === 'ANALYZING') return 'active';
+      if (hasSkills && session?.skills.every((s) => s.status === 'COMPLETED' || s.status === 'FAILED')) {
+        return running ? 'active' : 'done';
+      }
       return hasSkills ? 'active' : running ? 'active' : 'idle';
     }
-    if (!skills) return 'pending';
+
+    if (!skills?.length) return 'pending';
+
     const statuses = skills.map(skillStatus);
     if (statuses.some((s) => s === 'RUNNING')) return 'active';
-    if (statuses.every((s) => s === 'COMPLETED' || s === 'FAILED'))
+    // Only mark done when every expected skill has a terminal status.
+    if (
+      statuses.length > 0 &&
+      statuses.every((s) => s === 'COMPLETED' || s === 'FAILED')
+    ) {
       return 'done';
-    if (statuses.length === skills.length) return hasSkills ? 'active' : 'idle';
-    return 'pending';
+    }
+    if (statuses.some((s) => s === 'COMPLETED' || s === 'FAILED' || s === 'PENDING')) {
+      return 'active';
+    }
+    return hasSkills || running ? 'active' : 'pending';
   };
 
   const fillFraction = (() => {
+    if (finished) return 1;
     const states = STEPS.map((s, i) => stepState(i, s.skills));
     const firstActive = states.indexOf('active');
     const lastDone = states.reduce(
@@ -73,8 +101,26 @@ export function ResearchProgress() {
     return Math.max(0, Math.min(1, front / (STEPS.length - 1)));
   })();
 
+  const taskDone = (skill?: string): boolean => {
+    if (finished) return true;
+    if (!skill || skill === 'plan') return planDone && (hasSkills || finished);
+    const st = skillStatus(skill);
+    return st === 'COMPLETED' || st === 'FAILED';
+  };
+
+  const taskActive = (skill?: string): boolean => {
+    if (finished) return false;
+    if (!skill || skill === 'plan') {
+      return Boolean(running || session) && !taskDone(skill);
+    }
+    return skillStatus(skill) === 'RUNNING';
+  };
+
   return (
-    <section className="relative rounded-lg border border-[#173a5a] bg-[#071424]">
+    <section
+      id="section-overview"
+      className="relative scroll-mt-16 rounded-lg border border-[#173a5a] bg-[#071424]"
+    >
       <NumberBadge number="3" />
 
       <div className="flex items-center justify-between border-b border-[#142b44] px-5 py-4">
@@ -84,10 +130,18 @@ export function ResearchProgress() {
           </div>
 
           <span className="text-[12px] font-semibold">
-            Research in Progress
+            {complete
+              ? 'Research Complete'
+              : failed
+                ? 'Research Failed'
+                : 'Research in Progress'}
           </span>
 
-          {hasSkills ? (
+          {complete ? (
+            <span className="rounded bg-[#063e3e] px-2 py-1 text-[8px] font-semibold text-[#31e5bb]">
+              Done
+            </span>
+          ) : hasSkills && !finished ? (
             <span className="rounded bg-[#063e3e] px-2 py-1 text-[8px] font-semibold text-[#31e5bb]">
               Live
             </span>
@@ -96,7 +150,7 @@ export function ResearchProgress() {
 
         <span className="flex items-center gap-1 text-[8px] text-[#71849a]">
           <Clock3 size={10} />
-          {running ? 'Running…' : '2–3 min'}
+          {complete ? 'Finished' : running ? 'Running…' : '2–3 min'}
         </span>
       </div>
 
@@ -163,9 +217,9 @@ export function ResearchProgress() {
         <div className="mt-5 rounded-lg border border-[#173756] bg-[#091b30] p-4">
           <div className="mb-3 flex items-center gap-2 text-[10px] font-medium text-[#d9e8f8]">
             <Sparkles size={12} className="text-[#668dff]" />
-            {session?.status === 'COMPLETED'
+            {complete
               ? 'Research complete — thesis generated.'
-              : session?.status === 'FAILED'
+              : failed
                 ? 'Research pipeline failed. Try again.'
                 : hasSkills
                   ? 'Analyzing latest news and market sentiment…'
@@ -174,30 +228,21 @@ export function ResearchProgress() {
                     : 'Type a question and press Enter to start research.'}
           </div>
 
-          {hasSkills || running ? (
+          {(hasSkills || running) && !finished ? (
             <div className="relative mb-3 h-0.5 overflow-hidden rounded-full bg-[#132b45]">
               <div className="load-sweep absolute inset-y-0 w-1/3 rounded-full bg-linear-to-r from-transparent via-[#19c8ef] to-transparent" />
             </div>
           ) : null}
 
           <div className="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2">
-            {TASKS.map((task) => {
-              const done = !!task.skill
-                ? skillStatus(task.skill) === 'COMPLETED' ||
-                  skillStatus(task.skill) === 'FAILED'
-                : hasSkills;
-              const active =
-                skillStatus(task.skill ?? '') === 'RUNNING';
-
-              return (
-                <ProgressTask
-                  key={task.text}
-                  text={task.text}
-                  done={done}
-                  active={active && !done}
-                />
-              );
-            })}
+            {TASKS.map((task) => (
+              <ProgressTask
+                key={task.text}
+                text={task.text}
+                done={taskDone(task.skill)}
+                active={taskActive(task.skill)}
+              />
+            ))}
           </div>
         </div>
       </div>

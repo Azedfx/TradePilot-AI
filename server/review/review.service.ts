@@ -34,10 +34,14 @@ export interface ReviewReport {
   title: string;
   recap: string;
   badPatterns: string[];
+  /** Structured flags with stable ids (used for cross-session recurrence). */
+  patterns: PatternFlag[];
   recurring: RecurringPattern[];
   checklist: ReusableChecklistItem[];
   markdown: string;
   source: 'rules';
+  skillsCompleted: number;
+  plannedSkills: number;
 }
 
 interface NormalizedThesis {
@@ -110,10 +114,13 @@ export class ReviewService {
       title: `Self-evolution review — ${thesis?.direction ?? 'mixed'} thesis`,
       recap,
       badPatterns: patterns.map((p) => p.message),
+      patterns,
       recurring,
       checklist,
       markdown,
       source: 'rules',
+      skillsCompleted: skills.length,
+      plannedSkills,
     };
   }
 
