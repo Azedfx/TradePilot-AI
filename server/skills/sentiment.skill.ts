@@ -30,8 +30,14 @@ export class SentimentSkill extends BaseSkill {
     if (isStock) {
       return this.buildResult(
         'sentiment',
-        `Crypto-specific sentiment metrics (Fear & Greed index, futures long/short positioning) do not apply to US equities; ${context.symbols.join(', ')} sentiment is inferred from news tone and technical momentum elsewhere in this report.`,
-        { fearAndGreed: null, derivatives: [], source: 'not-applicable-for-stocks' },
+        `${context.symbols.join(', ')}: equity sentiment uses news tone and technical momentum (Fear & Greed / futures L-S are crypto-only).`,
+        {
+          fearAndGreed: null,
+          derivatives: [],
+          source: 'not-applicable-for-stocks',
+          guidance:
+            'For US stocks / rTokens, read crowd mood from News Briefing tone and Technical trend/RSI — not crypto Fear & Greed.',
+        },
       );
     }
 

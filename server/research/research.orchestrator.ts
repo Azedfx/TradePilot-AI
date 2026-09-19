@@ -282,6 +282,31 @@ export class ResearchOrchestrator {
         sentiment: 'neutral',
         data: result.data,
       });
+
+      // Expand news headlines into individual findings so the desk UI and
+      // Key Evidence can show the actual stories, not just a count.
+      if (result.skill === 'news') {
+        const headlines = (
+          result.data as { headlines?: Array<Record<string, unknown>> } | null
+        )?.headlines;
+        if (Array.isArray(headlines)) {
+          for (const h of headlines.slice(0, 8)) {
+            const title = String(h.title ?? '').trim();
+            if (!title) continue;
+            await this.repo.saveFinding({
+              sessionId,
+              category: 'news',
+              title,
+              statement:
+                String(h.summary ?? '').trim() ||
+                `${h.source ?? 'News'} · ${h.publishedAt ?? 'recent'}`,
+              importance: 'medium',
+              sentiment: typeof h.sentiment === 'string' ? h.sentiment : 'neutral',
+              data: h,
+            });
+          }
+        }
+      }
     }
   }
 

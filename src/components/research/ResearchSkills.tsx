@@ -4,6 +4,7 @@ import {
   Activity,
   BarChart3,
   ChevronDown,
+  ExternalLink,
   Gauge,
   LineChart,
   Newspaper,
@@ -98,11 +99,13 @@ export function ResearchSkills() {
           const run = session?.skills.find((s) => s.skillName === skill.key);
           const state = stateFor(skill.key);
           const open = openKey === skill.key;
-          const canOpen = state === 'done' || state === 'active' || Boolean(run?.summary);
+          const canOpen =
+            state === 'done' || state === 'active' || Boolean(run?.summary);
 
           return (
             <SkillCard
               key={skill.name}
+              skillKey={skill.key}
               skill={skill}
               state={state}
               durationMs={run?.durationMs ?? null}
@@ -124,6 +127,7 @@ export function ResearchSkills() {
 }
 
 function SkillCard({
+  skillKey,
   skill,
   state,
   durationMs,
@@ -134,6 +138,7 @@ function SkillCard({
   canOpen,
   onToggle,
 }: {
+  skillKey: string;
   skill: { name: string; description: string; icon: ReactNode };
   state: 'done' | 'active' | 'pending' | 'idle';
   durationMs: number | null;
@@ -145,6 +150,7 @@ function SkillCard({
   onToggle: () => void;
 }) {
   const active = state === 'active';
+  const detail = extractSkillDetail(skillKey, findings);
 
   const badge = {
     done: {
@@ -165,6 +171,15 @@ function SkillCard({
     },
   }[state];
 
+  const preview =
+    detail.kind === 'headlines' && detail.items[0]
+      ? detail.items[0].title
+      : detail.kind === 'setups' && detail.items[0]
+        ? `${detail.items[0].Symbol} · ${detail.items[0].Trend}`
+        : detail.kind === 'rows' && detail.items[0]
+          ? `${detail.items[0].label}: ${detail.items[0].value}`
+          : summary;
+
   return (
     <div
       className={`rounded-lg transition ${
@@ -177,9 +192,7 @@ function SkillCard({
         disabled={!canOpen}
         aria-expanded={open}
         className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${
-          canOpen
-            ? 'cursor-pointer'
-            : 'cursor-default opacity-80'
+          canOpen ? 'cursor-pointer' : 'cursor-default opacity-80'
         }`}
       >
         <div
@@ -211,49 +224,380 @@ function SkillCard({
         ) : null}
       </button>
 
-      {!open && state === 'done' && summary ? (
+      {!open && state === 'done' && preview ? (
         <p className="line-clamp-2 px-3 pb-2.5 pl-14 text-[8px] leading-3 text-[#8fa2b7]">
-          {summary}
+          {preview}
         </p>
       ) : null}
 
       {open ? (
         <div className="space-y-2 border-t border-[#142b44] px-3 py-3 pl-14">
-          {summary ? (
-            <p className="text-[9px] leading-3.5 text-[#b7c7d8]">{summary}</p>
-          ) : error ? (
+          {error ? (
             <p className="text-[9px] leading-3.5 text-[#f05d65]">{error}</p>
-          ) : (
-            <p className="text-[9px] text-[#71869f]">
-              {active ? 'Skill is still running…' : 'No summary for this skill yet.'}
-            </p>
-          )}
-
-          {findings.length > 0 ? (
-            <ul className="space-y-1.5">
-              {findings.map((f, i) => (
-                <li
-                  key={`${f.title}-${i}`}
-                  className="rounded-md border border-[#153653] bg-[#08172a] px-2.5 py-2"
-                >
-                  <p className="text-[8px] font-semibold text-[#9ec4e8]">
-                    {f.title}
-                  </p>
-                  <p className="mt-1 text-[8px] leading-3 text-[#8fa2b7]">
-                    {f.statement}
-                  </p>
-                </li>
-              ))}
-            </ul>
           ) : null}
 
-          {canOpen && !summary && !error && findings.length === 0 && !active ? (
-            <p className="text-[8px] text-[#63778f]">
-              Run research to populate this skill.
-            </p>
-          ) : null}
+          <SkillDetailBody detail={detail} summary={summary} active={active} />
         </div>
       ) : null}
     </div>
   );
+}
+
+type HeadlineItem = {
+  title: string;
+  url?: string | null;
+  source?: string;
+  publishedAt?: string;
+  summary?: string;
+};
+
+type SkillDetail =
+  | { kind: 'headlines'; items: HeadlineItem[] }
+  | { kind: 'rows'; items: { label: string; value: string }[] }
+  | { kind: 'setups'; items: Array<Record<string, string>> }
+  | { kind: 'text'; items: string[] }
+  | { kind: 'empty' };
+
+function num(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return null;
+}
+
+function money(value: unknown): string | null {
+  const n = num(value);
+  if (n == null) return null;
+  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function pct(value: unknown): string | null {
+  const n = num(value);
+  if (n == null) return null;
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+}
+
+function pick(obj: Record<string, unknown> | null | undefined, keys: string[]): unknown {
+  if (!obj) return undefined;
+  for (const k of keys) {
+    if (obj[k] != null) return obj[k];
+  }
+  return undefined;
+}
+
+function extractSkillDetail(
+  skillKey: string,
+  findings: FindingView[],
+): SkillDetail {
+  const summaryFinding = findings.find((f) =>
+    f.title.toLowerCase().startsWith('summary from'),
+  );
+  const data = (summaryFinding?.data ?? findings[0]?.data ?? null) as Record<
+    string,
+    unknown
+  > | null;
+
+  if (skillKey === 'news') {
+    const fromData = Array.isArray(data?.headlines)
+      ? (data.headlines as HeadlineItem[])
+      : [];
+    const fromFindings = findings
+      .filter((f) => !f.title.toLowerCase().startsWith('summary from'))
+      .map((f) => {
+        const d = (f.data ?? {}) as HeadlineItem;
+        return {
+          title: f.title,
+          url: d.url ?? null,
+          source: d.source,
+          publishedAt: d.publishedAt,
+          summary: f.statement !== f.title ? f.statement : d.summary,
+        };
+      });
+    const items = (fromData.length ? fromData : fromFindings).filter((h) =>
+      Boolean(h.title?.trim()),
+    );
+    if (items.length) return { kind: 'headlines', items };
+  }
+
+  if (skillKey === 'market' && data) {
+    const stats = (data.globalStats ?? null) as Record<string, unknown> | null;
+    const flows = Array.isArray(data.flows)
+      ? (data.flows as Array<Record<string, unknown>>)
+      : [];
+    const lead = stats ?? flows[0] ?? null;
+    const rows: { label: string; value: string }[] = [];
+
+    const symbol = pick(lead ?? undefined, ['symbol']);
+    const price = pick(lead ?? undefined, ['price', 'lastPrice']);
+    const change = pick(lead ?? undefined, ['change_24h', 'change24h']);
+    const high = pick(lead ?? undefined, ['high_24h', 'high24h']);
+    const low = pick(lead ?? undefined, ['low_24h', 'low24h']);
+    const volume = pick(lead ?? undefined, ['volume_24h', 'volume24h']);
+
+    if (symbol != null) rows.push({ label: 'Symbol', value: String(symbol) });
+    if (money(price)) rows.push({ label: 'Last', value: money(price)! });
+    if (pct(change)) rows.push({ label: '24h change', value: pct(change)! });
+    if (money(high)) rows.push({ label: '24h high', value: money(high)! });
+    if (money(low)) rows.push({ label: '24h low', value: money(low)! });
+    if (num(volume) != null) {
+      rows.push({
+        label: '24h volume',
+        value: num(volume)!.toLocaleString(),
+      });
+    }
+    if (data.source) rows.push({ label: 'Source', value: String(data.source) });
+    if (rows.length) return { kind: 'rows', items: rows };
+  }
+
+  if (skillKey === 'technical' && data) {
+    const setups = Array.isArray(data.setups)
+      ? (data.setups as Array<Record<string, unknown>>)
+      : [];
+    const items: Array<Record<string, string>> = [];
+    for (const s of setups.slice(0, 4)) {
+      const rsiObj = s.rsi as Record<string, unknown> | number | undefined;
+      const macdObj = s.macd as Record<string, unknown> | undefined;
+      const maObj = s.ma as Record<string, unknown> | undefined;
+      const rsiVal =
+        typeof rsiObj === 'number'
+          ? rsiObj
+          : num(pick(rsiObj, ['value', 'rsi']));
+      const rsiSignal =
+        typeof rsiObj === 'object' && rsiObj
+          ? String(rsiObj.signal ?? '')
+          : '';
+      const trend = String(s.trend ?? s.verdict ?? 'n/a');
+      const item: Record<string, string> = {
+        Symbol: String(s.symbol ?? 'Asset'),
+        Trend: trend,
+      };
+      if (money(s.lastPrice)) item.Price = money(s.lastPrice)!;
+      if (rsiVal != null) {
+        item.RSI = `${rsiVal.toFixed(1)}${rsiSignal ? ` (${rsiSignal})` : ''}`;
+      }
+      if (macdObj?.signal != null) item.MACD = String(macdObj.signal);
+      else if (macdObj?.cross != null) item.MACD = String(macdObj.cross);
+      if (maObj?.ma20 != null) item['MA20'] = money(maObj.ma20) ?? String(maObj.ma20);
+      if (maObj?.ma50 != null) item['MA50'] = money(maObj.ma50) ?? String(maObj.ma50);
+      if (money(s.support)) item.Support = money(s.support)!;
+      if (money(s.resistance)) item.Resistance = money(s.resistance)!;
+      if (s.note) item.Note = String(s.note);
+      items.push(item);
+    }
+    if (items.length) return { kind: 'setups', items };
+  }
+
+  if (skillKey === 'macro' && data) {
+    const rows: { label: string; value: string }[] = [];
+    if (data.environment != null) {
+      rows.push({ label: 'Environment', value: String(data.environment) });
+    }
+    const window = data.usMarketWindow as {
+      note?: string;
+      session?: string;
+      etClock?: string;
+      nextOpenDescription?: string;
+    } | null;
+    if (window?.session) {
+      rows.push({ label: 'US session', value: String(window.session) });
+    }
+    if (window?.etClock) {
+      rows.push({ label: 'Clock (ET)', value: String(window.etClock) });
+    }
+    if (window?.nextOpenDescription) {
+      rows.push({ label: 'Next open', value: String(window.nextOpenDescription) });
+    }
+    if (window?.note) {
+      rows.push({ label: 'rToken note', value: window.note });
+    }
+    const rates = data.rates as Record<string, unknown> | null;
+    if (rates && typeof rates === 'object') {
+      for (const [k, v] of Object.entries(rates).slice(0, 4)) {
+        if (v != null && typeof v !== 'object') {
+          rows.push({ label: k, value: String(v) });
+        }
+      }
+    }
+    if (data.source) rows.push({ label: 'Source', value: String(data.source) });
+    if (rows.length) return { kind: 'rows', items: rows };
+  }
+
+  if (skillKey === 'sentiment' && data) {
+    const rows: { label: string; value: string }[] = [];
+    if (data.source === 'not-applicable-for-stocks') {
+      rows.push({
+        label: 'Equity path',
+        value: 'Use News tone + Technical momentum for positioning',
+      });
+      if (typeof data.guidance === 'string') {
+        rows.push({ label: 'Why', value: data.guidance });
+      } else {
+        rows.push({
+          label: 'Note',
+          value: 'Fear & Greed / futures L-S are crypto-market metrics',
+        });
+      }
+      return { kind: 'rows', items: rows };
+    }
+    const fg = data.fearAndGreed as { value?: number; classification?: string } | null;
+    if (fg?.value != null) {
+      rows.push({
+        label: 'Fear & Greed',
+        value: `${fg.value}${fg.classification ? ` · ${fg.classification}` : ''}`,
+      });
+    }
+    const derivatives = Array.isArray(data.derivatives)
+      ? (data.derivatives as Array<Record<string, unknown>>)
+      : [];
+    for (const d of derivatives.slice(0, 3)) {
+      const parts = [
+        d.longShortRatio != null ? `L/S ${d.longShortRatio}` : null,
+        d.fundingRate != null ? `funding ${d.fundingRate}` : null,
+      ].filter(Boolean);
+      if (parts.length) {
+        rows.push({ label: String(d.symbol ?? 'Deriv'), value: parts.join(' · ') });
+      }
+    }
+    if (data.source) rows.push({ label: 'Source', value: String(data.source) });
+    if (rows.length) return { kind: 'rows', items: rows };
+  }
+
+  return { kind: 'empty' };
+}
+
+function SkillDetailBody({
+  detail,
+  summary,
+  active,
+}: {
+  detail: SkillDetail;
+  summary?: string | null;
+  active: boolean;
+}) {
+  if (detail.kind === 'headlines') {
+    return (
+      <ul className="space-y-1.5">
+        {detail.items.map((h, i) => (
+          <li
+            key={`${h.title}-${i}`}
+            className="rounded-md border border-[#153653] bg-[#08172a] px-2.5 py-2"
+          >
+            {h.url ? (
+              <a
+                href={h.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-start gap-1.5 text-[8px] font-semibold text-[#9ec4e8] hover:text-[#57d9ff]"
+              >
+                <span className="min-w-0 flex-1">{h.title}</span>
+                <ExternalLink size={10} className="mt-0.5 shrink-0" />
+              </a>
+            ) : (
+              <p className="text-[8px] font-semibold text-[#9ec4e8]">{h.title}</p>
+            )}
+            <p className="mt-1 text-[7px] text-[#6f849d]">
+              {[h.source, formatWhen(h.publishedAt)].filter(Boolean).join(' · ')}
+            </p>
+            {h.summary ? (
+              <p className="mt-1 line-clamp-3 text-[8px] leading-3 text-[#8fa2b7]">
+                {stripHtml(h.summary)}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (detail.kind === 'setups') {
+    return (
+      <ul className="space-y-1.5">
+        {detail.items.map((item, i) => (
+          <li
+            key={`${item.Symbol}-${i}`}
+            className="rounded-md border border-[#153653] bg-[#08172a] px-2.5 py-2"
+          >
+            <p className="text-[8px] font-semibold text-[#9ec4e8]">
+              {item.Symbol}
+              {item.Trend ? ` · ${item.Trend}` : ''}
+            </p>
+            <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+              {Object.entries(item)
+                .filter(([k]) => k !== 'Symbol' && k !== 'Trend' && k !== 'Note')
+                .map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-2 text-[7px]">
+                    <span className="text-[#6f849d]">{k}</span>
+                    <span className="text-[#c9d6e5]">{v}</span>
+                  </div>
+                ))}
+            </div>
+            {item.Note ? (
+              <p className="mt-1 text-[7px] text-[#6f849d]">{item.Note}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (detail.kind === 'rows') {
+    return (
+      <ul className="space-y-1.5">
+        {detail.items.map((row) => (
+          <li
+            key={row.label}
+            className="flex items-start justify-between gap-3 rounded-md border border-[#153653] bg-[#08172a] px-2.5 py-2"
+          >
+            <span className="shrink-0 text-[8px] text-[#6f849d]">{row.label}</span>
+            <span className="text-right text-[8px] leading-3 text-[#c9d6e5]">
+              {row.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (detail.kind === 'text') {
+    return (
+      <ul className="space-y-1.5">
+        {detail.items.map((t, i) => (
+          <li
+            key={i}
+            className="rounded-md border border-[#153653] bg-[#08172a] px-2.5 py-2 text-[8px] leading-3 text-[#8fa2b7]"
+          >
+            {t}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  // Only show the prose summary when we truly have no structured payload.
+  if (summary) {
+    return <p className="text-[9px] leading-3.5 text-[#b7c7d8]">{summary}</p>;
+  }
+
+  return (
+    <p className="text-[9px] text-[#71869f]">
+      {active ? 'Skill is still running…' : 'No detail available for this skill yet.'}
+    </p>
+  );
+}
+
+function formatWhen(value?: string): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
