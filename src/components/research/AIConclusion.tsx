@@ -160,17 +160,14 @@ export function AIConclusion({
         )}
       </section>
 
-      {/* Full report excerpt */}
+      {/* Full report */}
       {session?.report ? (
         <section className="relative p-5">
           <div className="mb-3 flex items-center gap-2">
             <FileText size={14} className="text-[#7da0ff]" />
             <h2 className="text-[12px] font-semibold">Research Report</h2>
           </div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-[#183754] bg-[#09182a] p-3 text-[8px] leading-3.5 text-[#9ab0c6]">
-            {session.report.slice(0, 2400)}
-            {session.report.length > 2400 ? '\n…' : ''}
-          </pre>
+          <ResearchReportView markdown={session.report} />
         </section>
       ) : null}
     </>
@@ -279,6 +276,148 @@ function findingToEvidence(f: FindingView): Evidence {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+/** Lightweight markdown → structured report cards (no raw # / ** dump). */
+function ResearchReportView({ markdown }: { markdown: string }) {
+  const parsed = parseReportMarkdown(markdown);
+
+  return (
+    <div className="max-h-80 space-y-3 overflow-auto rounded-lg border border-[#183754] bg-[#09182a] p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[11px] font-semibold text-[#dce8f7]">{parsed.title}</p>
+        {parsed.bias ? (
+          <span className="rounded bg-[#163351] px-2 py-0.5 text-[7px] font-semibold uppercase text-[#54d8ff]">
+            {parsed.bias}
+          </span>
+        ) : null}
+        {parsed.confidence ? (
+          <span className="rounded bg-[#0d2a24] px-2 py-0.5 text-[7px] font-semibold text-[#3bdbbc]">
+            {parsed.confidence}
+          </span>
+        ) : null}
+      </div>
+
+      {parsed.summary ? (
+        <p className="text-[9px] leading-3.75 text-[#a8b9cc]">{parsed.summary}</p>
+      ) : null}
+
+      {parsed.sections.map((section) => (
+        <div key={section.heading}>
+          <h3 className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-[#7ea0c4]">
+            {section.heading}
+          </h3>
+          {section.bullets.length ? (
+            <ul className="space-y-1">
+              {section.bullets.map((b, i) => (
+                <li
+                  key={`${section.heading}-${i}`}
+                  className="flex gap-2 text-[8px] leading-3.25 text-[#9ab0c6]"
+                >
+                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[#3d6a94]" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          ) : section.body ? (
+            <p className="text-[8px] leading-3.25 text-[#9ab0c6]">{section.body}</p>
+          ) : null}
+        </div>
+      ))}
+
+      {parsed.footer ? (
+        <p className="text-[7px] text-[#5f7189]">{parsed.footer}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function parseReportMarkdown(markdown: string): {
+  title: string;
+  bias: string | null;
+  confidence: string | null;
+  summary: string;
+  sections: Array<{ heading: string; bullets: string[]; body: string }>;
+  footer: string | null;
+} {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  let title = 'Research Report';
+  let bias: string | null = null;
+  let confidence: string | null = null;
+  const summaryParts: string[] = [];
+  const sections: Array<{ heading: string; bullets: string[]; body: string }> =
+    [];
+  let current: { heading: string; bullets: string[]; bodyParts: string[] } | null =
+    null;
+  let footer: string | null = null;
+
+  const flush = () => {
+    if (!current) return;
+    sections.push({
+      heading: current.heading,
+      bullets: current.bullets,
+      body: current.bodyParts.join(' ').trim(),
+    });
+    current = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (line.startsWith('# ')) {
+      title = line.replace(/^#\s+/, '').replace(/\s*[—-]\s*Research Report$/i, '').trim()
+        || title;
+      if (!/research report/i.test(title)) title = `${title} — Research Report`;
+      continue;
+    }
+
+    const meta = /^\*\*Bias:\*\*\s*(\w+)\s*\|\s*\*\*Confidence:\*\*\s*([\d.]+%)/i.exec(
+      line,
+    );
+    if (meta) {
+      bias = meta[1];
+      confidence = meta[2];
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      flush();
+      current = {
+        heading: line.replace(/^##\s+/, ''),
+        bullets: [],
+        bodyParts: [],
+      };
+      continue;
+    }
+
+    if (line.startsWith('_') && line.endsWith('_')) {
+      footer = line.replace(/^_|_$/g, '');
+      continue;
+    }
+
+    const bullet = /^[-*]\s+(.+)$/.exec(line);
+    if (bullet) {
+      const text = bullet[1].replace(/\*\*(.*?)\*\*/g, '$1');
+      if (current) current.bullets.push(text);
+      else summaryParts.push(text);
+      continue;
+    }
+
+    const prose = line.replace(/\*\*(.*?)\*\*/g, '$1');
+    if (current) current.bodyParts.push(prose);
+    else summaryParts.push(prose);
+  }
+  flush();
+
+  return {
+    title,
+    bias,
+    confidence,
+    summary: summaryParts.join(' ').replace(/\s+/g, ' ').trim(),
+    sections,
+    footer,
+  };
 }
 
 function EvidenceItem({

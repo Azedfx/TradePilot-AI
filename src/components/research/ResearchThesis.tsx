@@ -159,12 +159,12 @@ export function ResearchThesis() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            {renderScenarios(session?.stressTests)}
+            {renderScenarios(session?.stressTests, session?.symbol)}
           </div>
 
-          {session?.stressTests?.[0]?.recommendation ? (
+          {primaryRecommendation(session?.stressTests, session?.symbol) ? (
             <p className="mt-3 text-[8px] leading-3.5 text-[#7e94ae]">
-              {session.stressTests[0].recommendation}
+              {primaryRecommendation(session?.stressTests, session?.symbol)}
             </p>
           ) : null}
         </section>
@@ -173,23 +173,62 @@ export function ResearchThesis() {
   );
 }
 
+type StressCard = {
+  symbol: string;
+  name?: string;
+  scenarios: {
+    name: string;
+    description?: string;
+    worstCase: number;
+    maxDrawdown?: number;
+    recoveryMonths?: number;
+  }[];
+  recommendation?: string;
+};
+
+/** One card per scenario name — drop duplicates from false multi-ticker runs. */
+function uniqueScenarios(
+  stressTests: unknown[] | null | undefined,
+  primarySymbol?: string | null,
+): StressCard[] {
+  if (!stressTests?.length) return [];
+  const cards = stressTests as StressCard[];
+  const preferred = primarySymbol
+    ? cards.filter((s) => {
+        const rec = (s.recommendation ?? '').toUpperCase();
+        const sym = (s.symbol ?? '').toUpperCase();
+        const primary = primarySymbol.toUpperCase();
+        return sym === primary || rec.includes(primary);
+      })
+    : cards;
+  const pool = preferred.length ? preferred : cards;
+  const seen = new Set<string>();
+  const out: StressCard[] = [];
+  for (const s of pool) {
+    const key = (s.scenarios?.[0]?.name ?? s.name ?? '').toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+function primaryRecommendation(
+  stressTests: unknown[] | null | undefined,
+  primarySymbol?: string | null,
+): string | null {
+  const unique = uniqueScenarios(stressTests, primarySymbol);
+  const hit = unique.find((s) => s.recommendation?.trim());
+  return hit?.recommendation?.trim() || null;
+}
+
 function renderScenarios(
   stressTests: unknown[] | null | undefined,
+  primarySymbol?: string | null,
 ): ReactNode {
-  if (stressTests?.length) {
-    return stressTests.map((st, i) => {
-      const s = st as {
-        symbol: string;
-        name?: string;
-        scenarios: {
-          name: string;
-          description?: string;
-          worstCase: number;
-          maxDrawdown?: number;
-          recoveryMonths?: number;
-        }[];
-        recommendation?: string;
-      };
+  const unique = uniqueScenarios(stressTests, primarySymbol);
+  if (unique.length) {
+    return unique.map((s, i) => {
       const sc = s.scenarios?.[0];
       const drawdown = sc?.maxDrawdown ?? sc?.worstCase ?? 0;
       const pct = drawdown * 100;
@@ -202,7 +241,7 @@ function renderScenarios(
         'Downside scenario sized from live volatility';
       return (
         <ScenarioCard
-          key={i}
+          key={`${scenarioKey}-${i}`}
           title={title}
           subtitle={subtitle}
           returnValue={`${pct <= 0 ? '' : '+'}${pct.toFixed(1)}%`}

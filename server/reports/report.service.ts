@@ -89,7 +89,7 @@ export class ReportService {
     return {
       id: crypto.randomUUID(),
       sessionId,
-      title: `Research report: ${context.symbols.join(', ')}`,
+      title: `Research report: ${context.symbols[0] ?? 'Asset'}`,
       markdown: sanitizeText(markdown),
       summary: sanitizeText(thesis.rationale),
       generatedAt: new Date().toISOString(),
@@ -148,7 +148,7 @@ export class ReportService {
             (s) =>
               `${s.symbol}: worst-case ${
                 s.scenarios.length
-                  ? `${(Math.max(...s.scenarios.map((x) => x.maxDrawdown)) * 100).toFixed(1)}% `
+                  ? `${fmtPct(Math.max(...s.scenarios.map((x) => x.maxDrawdown)))} `
                   : ''
               }drawdown, ${s.threat >= 0.5 ? 'elevated' : 'moderate'} threat.`,
           )
@@ -165,13 +165,17 @@ export class ReportService {
           sampleSize?: number;
         };
         if (!s.symbol) return '';
-        return `${s.symbol}: ${s.sampleSize ?? 0} candles, ${s.returns?.total !== undefined ? `${(s.returns.total * 100).toFixed(1)}%` : 'n/a'} total return, ${s.volatilityAnnualized !== undefined ? `${(s.volatilityAnnualized * 100).toFixed(1)}%` : 'n/a'} annualized vol, ${s.maxDrawdown !== undefined ? `${(s.maxDrawdown * 100).toFixed(1)}%` : 'n/a'} historical max drawdown.`;
+        const total = fmtPct(s.returns?.total);
+        const vol = fmtPct(s.volatilityAnnualized);
+        const dd = fmtPct(s.maxDrawdown);
+        return `${s.symbol}: ${s.sampleSize ?? 0} candles, ${total} total return, ${vol} annualized vol, ${dd} historical max drawdown.`;
       })
       .filter(Boolean)
       .join(' ');
 
+    const primary = context.symbols[0] ?? 'Asset';
     return (
-      `Analysis across ${context.symbols.join(', ')} resolves to a ${conviction} bias ` +
+      `Analysis of ${primary} resolves to a ${conviction} bias ` +
       `with ${Math.round(thesis.confidence * 100)}% confidence. ` +
       `${thesis.rationale} ${stress} ` +
       (histLine ? `Historical distribution from live candles: ${histLine}` : '')
@@ -184,8 +188,9 @@ export class ReportService {
     stressTests: StressResult[],
     narrative: string,
   ): string {
+    const primary = context.symbols[0] ?? 'Asset';
     const lines: string[] = [];
-    lines.push(`# ${context.symbols.join(', ')} - Research Report`);
+    lines.push(`# ${primary} — Research Report`);
     lines.push('');
     lines.push(`**Bias:** ${thesis.direction} | **Confidence:** ${Math.round(
       thesis.confidence * 100,
@@ -194,21 +199,42 @@ export class ReportService {
     lines.push(narrative.replace(/^#\s+.+(?:\r?\n)*/, '').trim());
     lines.push('');
     lines.push('## Catalysts');
-    thesis.catalysts.forEach((c) => lines.push(`- ${c}`));
+    if (thesis.catalysts.length) {
+      thesis.catalysts.forEach((c) => lines.push(`- ${c}`));
+    } else {
+      lines.push('- None extracted for this run.');
+    }
     lines.push('');
     lines.push('## Risks');
-    thesis.risks.forEach((r) => lines.push(`- ${r}`));
+    if (thesis.risks.length) {
+      thesis.risks.forEach((r) => lines.push(`- ${r}`));
+    } else {
+      lines.push('- None extracted for this run.');
+    }
     if (stressTests.length) {
       lines.push('');
       lines.push('## Stress Tests');
       stressTests.forEach((s) => {
-        lines.push(`- **${s.symbol}**: ${s.recommendation}`);
+        const worst = s.scenarios.length
+          ? Math.max(...s.scenarios.map((x) => x.maxDrawdown))
+          : null;
+        const worstLabel =
+          worst != null && Number.isFinite(worst)
+            ? `${(worst * 100).toFixed(1)}% worst-case`
+            : 'n/a';
+        lines.push(`- **${s.symbol}** (${worstLabel}): ${s.recommendation}`);
       });
     }
     lines.push('');
     lines.push(`_Generated ${new Date().toISOString()}_`);
     return lines.join('\n');
   }
+}
+
+/** Format a fraction as a percent, or n/a when missing/NaN. */
+function fmtPct(value: number | undefined): string {
+  if (value == null || !Number.isFinite(value)) return 'n/a';
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 /** Strip C0 control chars (except newline/tab) so JSON serialization stays valid. */

@@ -15,10 +15,15 @@ import { useResearch } from '@/lib/research-context';
 import { getReview } from '@/lib/api';
 import type { ReviewReport } from '@/lib/types';
 
+const CHECKLIST_STORAGE_KEY = 'tradepilot:next-idea-checklist';
+
 /**
  * Self-evolution review after a completed research run.
  * Surfaces this-session critique, cross-session recurrence, and a
  * next-idea checklist (GET /api/review/:sessionId).
+ *
+ * Checklist ticks = "I acknowledged this for my next idea" on this device.
+ * They do not change the thesis or API — they help the trader carry lessons forward.
  */
 export function SelfReview() {
   const { session, sessionId } = useResearch();
@@ -28,7 +33,7 @@ export function SelfReview() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  const [acked, setAcked] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -38,7 +43,7 @@ export function SelfReview() {
       const report = await getReview(sessionId);
       setReview(report);
       setLoadedFor(sessionId);
-      setChecked({});
+      setAcked(readAcked());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load review');
     } finally {
@@ -51,6 +56,14 @@ export function SelfReview() {
       void load();
     }
   }, [done, sessionId, loadedFor, loading, load]);
+
+  const toggleAck = (check: string) => {
+    setAcked((prev) => {
+      const next = { ...prev, [check]: !prev[check] };
+      writeAcked(next);
+      return next;
+    });
+  };
 
   if (!done) {
     return (
@@ -80,8 +93,10 @@ export function SelfReview() {
         }));
 
   const recurringIds = new Set(review?.recurring.map((r) => r.id) ?? []);
-  // Don't repeat the same pattern under both "this session" and "recurring".
   const thisSessionOnly = patterns.filter((p) => !recurringIds.has(p.id));
+  const checkedCount = review
+    ? review.checklist.filter((item) => acked[item.check]).length
+    : 0;
 
   return (
     <section
@@ -162,22 +177,30 @@ export function SelfReview() {
             ) : null}
 
             <div>
-              <div className="mb-2 flex items-center gap-2">
-                <ClipboardCheck size={12} className="text-[#3bdbbc]" />
-                <h3 className="text-[10px] font-semibold text-[#dbe6f3]">
-                  Before your next idea
-                </h3>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck size={12} className="text-[#3bdbbc]" />
+                  <h3 className="text-[10px] font-semibold text-[#dbe6f3]">
+                    Before your next idea
+                  </h3>
+                </div>
+                <span className="text-[7px] text-[#5f7189]">
+                  {checkedCount}/{review.checklist.length} acknowledged
+                </span>
               </div>
+              <p className="mb-2 text-[8px] leading-3 text-[#6f849d]">
+                Tick when you&apos;ve considered the point for your next
+                research question. Saved on this device only — it doesn&apos;t
+                change this thesis.
+              </p>
               <ul className="space-y-2">
-                {review.checklist.map((item, i) => {
-                  const on = Boolean(checked[i]);
+                {review.checklist.map((item) => {
+                  const on = Boolean(acked[item.check]);
                   return (
-                    <li key={i}>
+                    <li key={item.check}>
                       <button
                         type="button"
-                        onClick={() =>
-                          setChecked((prev) => ({ ...prev, [i]: !prev[i] }))
-                        }
+                        onClick={() => toggleAck(item.check)}
                         className={`flex w-full cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition ${
                           on
                             ? 'border-[#087263] bg-[#08242a]'
@@ -222,7 +245,25 @@ export function SelfReview() {
   );
 }
 
-/** Soften the machine recap into a short readable sentence. */
+function readAcked(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(CHECKLIST_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, boolean>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAcked(next: Record<string, boolean>) {
+  try {
+    localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 function humanRecap(recap: string): string {
   const direction = /Direction\s+(\w+)/i.exec(recap)?.[1];
   const confidence = /confidence\s+(\d+)%/i.exec(recap)?.[1];

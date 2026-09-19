@@ -78,9 +78,12 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
         setSessionId(id);
         setQuestion(s.question);
       } catch (e) {
+        setSession(null);
+        setSessionId(null);
         setError(
           e instanceof Error ? e.message : 'Failed to load session',
         );
+        throw e;
       }
     },
     [],

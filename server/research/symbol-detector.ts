@@ -50,7 +50,11 @@ const STOCK_ALIASES: Record<string, string> = {
 const TICKER_RE = /\b([A-Za-z]{1,6})\b/g;
 
 export function detectSymbols(question: string): string[] {
-  const normalized = question.toLowerCase().replace(/[^a-z0-9\s/]/g, ' ');
+  // Strip rToken / tokenized phrasing so "R-Token" / "token" never become tickers.
+  const cleaned = question
+    .replace(/\br[\s-]?tokens?\b/gi, ' ')
+    .replace(/\btokenized\b/gi, ' ');
+  const normalized = cleaned.toLowerCase().replace(/[^a-z0-9\s/]/g, ' ');
   const tokens = normalized.split(/\s+/).filter(Boolean);
   const found: string[] = [];
 
@@ -62,7 +66,7 @@ export function detectSymbols(question: string): string[] {
   }
 
   if (found.length === 0) {
-    const raw = question.toUpperCase();
+    const raw = cleaned.toUpperCase();
     for (const match of raw.matchAll(TICKER_RE)) {
       const ticker = match[1];
       if (ticker.length >= 2 && /^[A-Z]{2,5}$/.test(ticker)) {
@@ -76,7 +80,9 @@ export function detectSymbols(question: string): string[] {
     }
   }
 
-  return [...new Set(found)];
+  // Prefer a single primary symbol for the desk — multi-ticker noise
+  // pollutes reports (stress/historical repeated per false positive).
+  return [...new Set(found)].slice(0, 1);
 }
 
 // Broad stopword list so freeform natural-language questions (the app's
@@ -97,6 +103,25 @@ const COMMON_WORDS = new Set([
   'HAS', 'HAVE', 'HAD', 'DOES', 'DID', 'DONE', 'BEEN', 'WAS', 'WERE',
   'YET', 'STILL', 'ALSO', 'EVEN', 'ONE', 'TWO', 'HOW', 'WHO', 'WHERE',
   'HOLD', 'HOLDING', 'HOLDER', 'ENTRY', 'EXIT', 'IDEA', 'PLAN', 'PLANS',
+  // Common English / research words that look like tickers
+  'TOKEN', 'TOKENS', 'AHEAD', 'NEXT', 'NEAR', 'OPEN', 'CLOSE', 'CALL',
+  'PUT', 'PUTS', 'CALLS', 'MOVE', 'MOVES', 'RUN', 'RUNS', 'PLAY', 'PLAYS',
+  'CASE', 'CASES', 'BEST', 'WORST', 'VIEW', 'VIEWS', 'TAKE', 'TAKES',
+  'STOCK', 'STOCKS', 'SHARE', 'SHARES', 'EQUITY', 'MARKET', 'MARKETS',
+  'PRICE', 'PRICES', 'TARGET', 'TARGETS', 'TRADE', 'TRADES', 'TRADER',
+  'TRADING', 'BUYING', 'SELLING', 'WEEK', 'WEEKS', 'MONTH', 'MONTHS',
+  'YEAR', 'YEARS', 'DAY', 'DAYS', 'HOUR', 'HOURS', 'TODAY', 'TONIGHT',
+  'EARNINGS', 'GUIDANCE', 'CONSENSUS', 'WHISPER', 'REPORT', 'ANALYSIS',
+  'OUTLOOK', 'THESIS', 'SETUP', 'SETUPS', 'SIGNAL', 'SIGNALS', 'TREND',
+  'RISKS', 'REWARD', 'SIZE', 'SIZING', 'STOP', 'STOPS', 'LEVEL', 'LEVELS',
+  'BULL', 'BEAR', 'BULLISH', 'BEARISH', 'NEUTRAL', 'MACRO', 'MICRO',
+  'NEWS', 'DATA', 'LIVE', 'REAL', 'TIME', 'BASED', 'USING', 'FROM',
+  'VS', 'VERSUS', 'PER', 'VIA', 'PLUS', 'MINUS', 'ONLY', 'MORE', 'LESS',
+  'VERY', 'MUCH', 'SUCH', 'EACH', 'BOTH', 'SAME', 'OTHER', 'THAN',
+  'THEN', 'ONCE', 'AGAIN', 'BACK', 'DOWN', 'UP', 'OFF', 'OWN', 'SEE',
+  'SEEMS', 'SEEM', 'FEEL', 'FEELS', 'WANT', 'WANTS', 'NEED', 'NEEDS',
+  'RIGHT', 'LEFT', 'SIDE', 'PART', 'FULL', 'HALF', 'LAST', 'FIRST',
+  'RECENT', 'CURRENT', 'CURRENTLY', 'LIKELY', 'MAYBE', 'PERHAPS',
 ]);
 
 /**

@@ -104,7 +104,10 @@ export class ResearchOrchestrator {
     // 3. Thesis + historical + stress tests
     const symbols = context.symbols;
     const thesis = await this.thesisService.build(skillResults, symbols);
-    const stressTests = await this.stressTestService.run(thesis, symbols);
+    const stressTests = await this.stressTestService.run(
+      thesis,
+      symbols.slice(0, 1),
+    );
 
     // 3b. Historical distribution (returns, volatility, max drawdown) from
     // real candles — the retrieval-side of decision stress testing. Safe to
@@ -112,7 +115,7 @@ export class ResearchOrchestrator {
     let historical: unknown[] = [];
     try {
       historical = await Promise.all(
-        symbols.map((symbol) =>
+        symbols.slice(0, 1).map((symbol) =>
           this.historicalService.compute(symbol, context.timeframe, 200),
         ),
       );

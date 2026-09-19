@@ -35,12 +35,36 @@ export class HistoricalService {
     limit = 200,
   ): Promise<HistoricalStats> {
     const candles = await this.marketData.getCandles(symbol, interval, limit);
-    const closes = candles.map((c) => c.close);
-    const highs = candles.map((c) => c.high);
-    const lows = candles.map((c) => c.low);
+    const closes = candles
+      .map((c) => c.close)
+      .filter((p) => Number.isFinite(p) && p > 0);
+    const highs = candles
+      .map((c) => c.high)
+      .filter((p) => Number.isFinite(p) && p > 0);
+    const lows = candles
+      .map((c) => c.low)
+      .filter((p) => Number.isFinite(p) && p > 0);
 
-    const totalReturn =
-      closes.length > 1 ? closes[closes.length - 1] / closes[0] - 1 : 0;
+    if (closes.length < 2) {
+      return {
+        symbol,
+        interval,
+        period: {
+          start: new Date(candles[0]?.ts ?? 0).toISOString(),
+          end: new Date(candles[candles.length - 1]?.ts ?? 0).toISOString(),
+        },
+        returns: { total: 0, annualized: 0 },
+        volatilityAnnualized: 0,
+        maxDrawdown: 0,
+        range: {
+          high: highs.length ? Math.max(...highs) : 0,
+          low: lows.length ? Math.min(...lows) : 0,
+        },
+        sampleSize: candles.length,
+      };
+    }
+
+    const totalReturn = closes[closes.length - 1] / closes[0] - 1;
     const volatility = this.annualizedVolatility(closes, interval);
     const maxDrawdown = this.maxDrawdown(closes);
 
@@ -52,14 +76,17 @@ export class HistoricalService {
         end: new Date(candles[candles.length - 1]?.ts ?? 0).toISOString(),
       },
       returns: {
-        total: totalReturn,
-        annualized: this.annualizedReturn(candles, interval),
+        total: Number.isFinite(totalReturn) ? totalReturn : 0,
+        annualized: this.annualizedReturn(
+          candles.filter((c) => Number.isFinite(c.close) && c.close > 0),
+          interval,
+        ),
       },
-      volatilityAnnualized: volatility,
-      maxDrawdown,
+      volatilityAnnualized: Number.isFinite(volatility) ? volatility : 0,
+      maxDrawdown: Number.isFinite(maxDrawdown) ? maxDrawdown : 0,
       range: {
-        high: Math.max(...highs),
-        low: Math.min(...lows),
+        high: highs.length ? Math.max(...highs) : 0,
+        low: lows.length ? Math.min(...lows) : 0,
       },
       sampleSize: candles.length,
     };
