@@ -5,7 +5,7 @@ import { AssetLogo } from '../ui/AssetLogo';
 import { NumberBadge } from '../ui/NumberBadge';
 import type { MarketSnapshot } from '@/lib/types';
 
-const WATCHLIST = ['BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'AAPL'];
+const WATCHLIST = ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'META'];
 
 export function WatchlistView() {
   const [snapshots, setSnapshots] = useState<Record<string, MarketSnapshot | null>>({});
@@ -87,9 +87,7 @@ function AssetCard({
         <AssetLogo type={symbol.toLowerCase()} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold text-[#e3ebf4]">{symbol}</p>
-          <p className="text-[8px] text-[#73869e]">
-            {snapshot?.assetType === 'crypto' ? 'Cryptocurrency' : 'US Stock'}
-          </p>
+          <p className="text-[8px] text-[#73869e]">US Stock</p>
         </div>
       </div>
 

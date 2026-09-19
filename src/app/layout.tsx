@@ -3,7 +3,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'TradePilot AI',
-  description: 'AI-powered crypto research and trade theses',
+  description:
+    'AI-powered research desk for US stocks and tokenized equities (rTokens)',
 };
 
 export default function RootLayout({

@@ -23,10 +23,26 @@ export function AssetLogo({ type }: { type: string }) {
     );
   }
 
-  if (type === 'btc') {
+  if (type === 'msft') {
     return (
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#8c4e0c] text-[17px] font-bold text-white">
-        ₿
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0f3a5c] text-[11px] font-bold text-[#00a4ef]">
+        MS
+      </div>
+    );
+  }
+
+  if (type === 'amzn') {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#3a2a12] text-[11px] font-bold text-[#ff9900]">
+        AZ
+      </div>
+    );
+  }
+
+  if (type === 'meta') {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1a2a4a] text-[11px] font-bold text-[#0668E1]">
+        ∞
       </div>
     );
   }

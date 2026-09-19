@@ -16,7 +16,7 @@ const EXAMPLES = [
   { text: 'NVDA after earnings', prompt: 'Should I consider buying NVDA after earnings?' },
   { text: 'TSLA outlook', prompt: 'Analyze the TSLA outlook and major risks.' },
   { text: 'AAPL technical analysis', prompt: 'Analyze AAPL technical structure.' },
-  { text: 'BTC macro outlook', prompt: 'Analyze the BTC macro outlook.' },
+  { text: 'rToken weekend risk', prompt: 'Analyze tokenized NVDA (rToken) weekend risk vs US market hours.' },
 ];
 
 export function HeroSection() {

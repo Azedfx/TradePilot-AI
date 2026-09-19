@@ -32,8 +32,8 @@ export function AssetNavigation() {
             <p className="text-[14px] font-semibold">{session?.symbol ?? '—'}</p>
             <p className="text-[8px] text-[#73869e]">
               {md
-                ? md.assetType === 'crypto'
-                  ? 'Cryptocurrency'
+                ? md.assetType === 'us-stock'
+                  ? 'US Stock / rToken'
                   : 'US Stock'
                 : '—'}
             </p>
@@ -98,6 +98,8 @@ function logoFor(symbol: string | null | undefined): string {
   if (s.includes('nvda')) return 'nvda';
   if (s.includes('tsla')) return 'tsla';
   if (s.includes('aapl')) return 'aapl';
-  if (s.includes('btc')) return 'btc';
+  if (s.includes('msft')) return 'msft';
+  if (s.includes('amzn')) return 'amzn';
+  if (s.includes('meta')) return 'meta';
   return s;
 }

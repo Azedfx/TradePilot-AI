@@ -12,16 +12,17 @@ const TEMPLATES = [
   },
   {
     title: 'Macro Regime Check',
-    desc: 'Understand the macro backdrop for crypto.',
+    desc: 'Understand the macro backdrop for US equities.',
     prompt:
-      'Analyze the BTC macro outlook: rates, DXY, liquidity, and global risk sentiment. Is this a good environment for Bitcoin?',
-    symbol: 'BTC',
+      'Analyze the US equity macro outlook for NVDA: rates, DXY, liquidity, and global risk sentiment. Is this a constructive environment for tech stocks?',
+    symbol: 'NVDA',
   },
   {
-    title: 'Altcoin Momentum',
-    desc: 'Evaluate a crypto from sentiment + technicals.',
-    prompt: 'Is SOL bullish right now? Analyze sentiment, technicals, and on-chain momentum.',
-    symbol: 'SOL',
+    title: 'rToken Weekend Risk',
+    desc: 'Stress the 7×24 rToken window vs US market hours.',
+    prompt:
+      'Analyze tokenized NVDA (rToken) risk when the US cash market is closed: weekend macro transmission, on-chain pricing, and how that differs from regular-session trading.',
+    symbol: 'NVDA',
   },
   {
     title: 'Tech Stock Technicals',
@@ -36,10 +37,11 @@ const TEMPLATES = [
     symbol: 'TSLA',
   },
   {
-    title: 'Ethereum Fundamentals',
-    desc: 'Assess ETH across every research skill.',
-    prompt: 'Analyze ETH across fundamentals, sentiment, macro, and technicals. Build a thesis.',
-    symbol: 'ETH',
+    title: 'Mega-Cap Fundamentals',
+    desc: 'Assess a US stock across every research skill.',
+    prompt:
+      'Analyze MSFT across fundamentals, sentiment, macro, and technicals. Build an investment thesis.',
+    symbol: 'MSFT',
   },
 ];
 

@@ -167,11 +167,12 @@ function CircleChip({
 
 function logoMark(symbol: string): string {
   const s = symbol.toLowerCase();
-  if (s.includes('btc') || s.includes('bitcoin')) return '₿';
-  if (s.includes('eth') || s.includes('ether')) return 'Ξ';
   if (s.includes('nvda')) return '◉';
   if (s.includes('tsla')) return 'T';
   if (s.includes('aapl')) return '';
+  if (s.includes('msft')) return 'MS';
+  if (s.includes('amzn')) return 'AZ';
+  if (s.includes('meta')) return '∞';
   return symbol.slice(0, 2).toUpperCase();
 }
 

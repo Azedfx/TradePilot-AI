@@ -76,7 +76,7 @@ export function MyResearchView() {
                   onClick={() => void openSession(r.sessionId)}
                   className="flex w-full items-center gap-3 rounded-lg border border-[#112a43] bg-[#08182a] p-3 text-left transition hover:border-[#24496d] hover:bg-[#0b1e33]"
                 >
-                  <AssetLogo type={r.symbol?.toLowerCase() ?? 'btc'} />
+                  <AssetLogo type={r.symbol?.toLowerCase() ?? 'nvda'} />
 
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-semibold text-[#e3ebf4]">
