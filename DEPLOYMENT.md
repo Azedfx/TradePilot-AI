@@ -17,6 +17,16 @@ web in one service** so a single public URL serves the dashboard and proxies
 4. After deploy, open the **service root URL** (not `/api`) — that is your
    Accessible Demo link. Health check: `/api/health`.
 
+### Keep free-tier Render from sleeping
+
+Free Render services sleep after ~15 minutes idle (first hit then cold-starts).
+This repo includes `.github/workflows/keep-awake.yml`, which pings
+`/api/health` every 10 minutes.
+
+1. Push to GitHub so Actions is enabled.
+2. Optional: set repo **variable** `DEMO_URL` (Settings → Secrets and variables → Actions → Variables) if the URL changes; default is the current Render URL.
+3. Confirm under **Actions → Keep Render awake** that scheduled runs succeed (or run **workflow_dispatch** once).
+
 ### Already have an API-only Render service?
 
 Update that service's settings and redeploy:

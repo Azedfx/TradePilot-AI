@@ -1,0 +1,35 @@
+# Keep the Render free-tier Demo awake (sleeps after ~15m idle).
+# Pings /api/health every 10 minutes. Override URL via repo variable DEMO_URL.
+name: Keep Render awake
+
+on:
+  schedule:
+    # Every 10 minutes — frequent enough to beat Render's idle sleep.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake Demo
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: |
+          set -e
+          BASE="${DEMO_URL:-https://tradepilot-ai-973j.onrender.com}"
+          URL="${BASE%/}/api/health"
+          echo "Pinging $URL"
+          # Cold start can take up to ~60s on free tier.
+          for i in 1 2 3; do
+            if curl -fsS -m 90 "$URL"; then
+              echo
+              echo "OK (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i failed; retrying…"
+            sleep 5
+          done
+          echo "All attempts failed"
+          exit 1
