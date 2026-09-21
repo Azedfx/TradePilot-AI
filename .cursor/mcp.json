@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "bitget-signal": {
+      "url": "https://datahub.noxiaohao.com/mcp"
+    },
+    "bitget-mcp-server": {
+      "url": "https://agent.bitget.com/mcp"
+    }
+  }
+}

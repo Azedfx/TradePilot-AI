@@ -391,6 +391,7 @@ function ThesisMiniCard({
 function HistoricalCard() {
   const { session } = useResearch();
   const stats = session?.historicalStats ?? [];
+  const matches = session?.historicalMatches ?? [];
   const primary = stats[0];
 
   return (
@@ -441,6 +442,30 @@ function HistoricalCard() {
             : 'Historical context appears after a research run completes.'}
         </p>
       )}
+
+      {matches.length > 0 ? (
+        <div className="mt-4 border-t border-[#142b44] pt-3">
+          <p className="mb-2 text-[9px] font-semibold text-[#9ab7d8]">
+            Similar scenarios
+          </p>
+          <div className="space-y-2">
+            {matches.slice(0, 4).map((m) => (
+              <div key={m.id} className="text-[8px] leading-3.5 text-[#8fa2b7]">
+                <span className="font-semibold text-[#c9d6e5]">
+                  {(m.similarityScore * 100).toFixed(0)}% · {m.eventType ?? 'event'}
+                  {m.eventDate ? ` · ${m.eventDate.slice(0, 10)}` : ''}
+                </span>
+                <p className="mt-0.5">
+                  {m.similarityExplanation ??
+                    (m.return5dPct != null
+                      ? `Forward 5d ${m.return5dPct >= 0 ? '+' : ''}${m.return5dPct.toFixed(1)}%`
+                      : 'Matched regime')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -21,6 +21,7 @@ export type DeskSectionId =
   | 'market'
   | 'news'
   | 'technical'
+  | 'fundamentals'
   | 'historical'
   | 'stress'
   | 'review'
@@ -67,6 +68,13 @@ const NAV: {
     icon: <LineChart size={13} />,
     target: 'section-skills',
     skillKey: 'technical',
+  },
+  {
+    id: 'fundamentals',
+    label: 'Fundamentals',
+    icon: <BookOpen size={13} />,
+    target: 'section-skills',
+    skillKey: 'fundamentals',
   },
   {
     id: 'historical',
@@ -143,9 +151,11 @@ export function AssetNavigation() {
             <p className="text-[14px] font-semibold">{session?.symbol ?? '—'}</p>
             <p className="text-[8px] text-[#73869e]">
               {session
-                ? md?.assetType === 'us-stock' || !md
-                  ? 'US Stock / rToken'
-                  : 'US Stock'
+                ? md?.venue === 'bitget-reality'
+                  ? `Bitget Reality · ${md.rTokenSymbol ?? `r${session.symbol}USDT`}`
+                  : md?.assetType === 'us-stock' || !md
+                    ? 'US Stock / rToken'
+                    : 'US Stock'
                 : 'No session yet'}
             </p>
             <p className="mt-1 text-[11px] font-semibold">
@@ -162,6 +172,17 @@ export function AssetNavigation() {
                 ? `${md.change24h >= 0 ? '+' : ''}${md.change24h.toFixed(2)}% (24h)`
                 : '—'}
             </p>
+            {md?.cashEquity && md.venue === 'bitget-reality' ? (
+              <p className="mt-1 text-[8px] text-[#8195ac]">
+                Cash {md.cashEquity.symbol} $
+                {md.cashEquity.last.toLocaleString(undefined, {
+                  maximumFractionDigits: 2,
+                })}
+                {md.rTokenVsCashPct != null
+                  ? ` · rToken ${md.rTokenVsCashPct >= 0 ? '+' : ''}${md.rTokenVsCashPct.toFixed(2)}% vs cash`
+                  : ''}
+              </p>
+            ) : null}
           </div>
         </div>
 

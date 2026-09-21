@@ -35,11 +35,18 @@ export class ReportService {
   }): Promise<Report> {
     const { sessionId, context, thesis, stressTests } = params;
 
-    const fallback = this.composeNarrative(context, thesis, stressTests, params.historical);
+    const fallback = this.composeNarrative(
+      context,
+      thesis,
+      stressTests,
+      params.historical,
+      params.skillResults,
+    );
     let narrative = fallback;
     if (this.llm.provider !== 'placeholder') {
       try {
-        narrative = await this.llm.complete([
+        narrative = await this.llm.complete(
+          [
           {
             role: 'system',
             content:
@@ -71,7 +78,9 @@ export class ReportService {
               params.historical,
             ),
           },
-        ]);
+          ],
+          { temperature: 0.2, maxTokens: 1200, timeoutMs: 18_000, maxAttempts: 1 },
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`LLM narrative failed, using composed fallback: ${message}`);
@@ -112,6 +121,7 @@ export class ReportService {
 
     const lines = [
       `Research target(s): ${context.symbols.join(', ')} (${context.assetType ?? 'us-stock'}, ${context.timeframe} timeframe).`,
+      `Primary market venue: Bitget Reality rToken when listed; cash equity (Yahoo) is a thin compare only.`,
       `Thesis direction: ${thesis.direction}.`,
       `Thesis confidence: ${Math.round(thesis.confidence * 100)}%.`,
       `Thesis rationale: ${thesis.rationale}`,
@@ -119,6 +129,17 @@ export class ReportService {
       `Stress tests (bear-case, worst-case drawdown):`,
       JSON.stringify(stressTests),
     ];
+
+    const marketStats = skillResults?.find((r) => r.skill === 'market')?.data?.[
+      'globalStats'
+    ] as Record<string, unknown> | undefined;
+    if (marketStats?.['venue'] === 'bitget-reality') {
+      lines.splice(
+        2,
+        0,
+        `Bitget Reality: ${String(marketStats['rTokenSymbol'] ?? '')} last=${marketStats['price']}, vs cash=${marketStats['rTokenVsCashPct'] ?? 'n/a'}%.`,
+      );
+    }
 
     if (historical && historical.length) {
       lines.push(
@@ -140,6 +161,7 @@ export class ReportService {
     thesis: Thesis,
     stressTests: StressResult[],
     historical?: unknown[],
+    skillResults?: SkillResult[],
   ): string {
     const conviction = thesis.direction === 'neutral' ? 'balanced' : thesis.direction;
     const stress = stressTests.length
@@ -173,8 +195,26 @@ export class ReportService {
       .filter(Boolean)
       .join(' ');
 
+    const marketStats = skillResults?.find((r) => r.skill === 'market')?.data?.[
+      'globalStats'
+    ] as Record<string, unknown> | undefined;
+    let venueLine = '';
+    if (marketStats?.['venue'] === 'bitget-reality') {
+      const pair = String(marketStats['rTokenSymbol'] ?? 'rToken');
+      const price = Number(marketStats['price'] ?? 0);
+      const vs = Number(marketStats['rTokenVsCashPct']);
+      venueLine =
+        `Primary market is Bitget Reality (${pair}` +
+        (price > 0 ? ` at $${price.toFixed(2)}` : '') +
+        ')' +
+        (Number.isFinite(vs)
+          ? `, trading ${vs >= 0 ? '+' : ''}${vs.toFixed(2)}% vs cash equity. `
+          : '. ');
+    }
+
     const primary = context.symbols[0] ?? 'Asset';
     return (
+      venueLine +
       `Analysis of ${primary} resolves to a ${conviction} bias ` +
       `with ${Math.round(thesis.confidence * 100)}% confidence. ` +
       `${thesis.rationale} ${stress} ` +

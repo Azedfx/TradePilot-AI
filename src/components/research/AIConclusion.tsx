@@ -23,7 +23,9 @@ const SKILL_LABEL: Record<string, string> = {
   macro: 'Macro Analyst',
   sentiment: 'Sentiment Analyst',
   technical: 'Technical Analysis',
-  historical: 'Historical Distribution',
+  fundamentals: 'Fundamentals / Earnings',
+  historical: 'Historical Scenarios',
+  review: 'Self-Evolution Review',
 };
 
 export function AIConclusion({
@@ -196,17 +198,58 @@ function buildEvidence(
   const findings = session?.findings ?? [];
 
   if (md?.price) {
+    const venueLabel =
+      md.venue === 'bitget-reality'
+        ? `Bitget Reality (${md.rTokenSymbol ?? `r${session?.symbol}USDT`})`
+        : 'Live market data';
+    const cashNote =
+      md.cashEquity && md.venue === 'bitget-reality'
+        ? ` · cash ${md.cashEquity.symbol} $${md.cashEquity.last.toLocaleString(undefined, { maximumFractionDigits: 2 })}${
+            md.rTokenVsCashPct != null
+              ? ` (${md.rTokenVsCashPct >= 0 ? '+' : ''}${md.rTokenVsCashPct.toFixed(2)}% vs cash)`
+              : ''
+          }`
+        : '';
     list.push({
       icon: '◉',
-      title: `${session?.symbol ?? 'Asset'} trading at $${md.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}${(md.change24h ?? 0) >= 0 ? ' (+' : ' ('}${(md.change24h ?? 0).toFixed(2)}% 24h)`,
-      source: 'Live market data',
+      title: `${session?.symbol ?? 'Asset'} trading at $${md.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}${(md.change24h ?? 0) >= 0 ? ' (+' : ' ('}${(md.change24h ?? 0).toFixed(2)}% 24h)${cashNote}`,
+      source: venueLabel,
       time: 'real-time',
       blue: true,
     });
   }
 
+  // Prefer fundamentals expectation-gap in Key Evidence for judges.
+  const fundFinding = findings.find((f) => f.category === 'fundamentals');
+  const fundData = (fundFinding?.data ?? null) as {
+    expectationGap?: { summary?: string } | null;
+    rangePosition?: { summary?: string } | null;
+    source?: string;
+  } | null;
+  if (fundData?.expectationGap?.summary) {
+    list.push({
+      icon: '✓',
+      title: fundData.expectationGap.summary,
+      source:
+        fundData.source === 'finnhub'
+          ? 'Fundamentals · Finnhub earnings'
+          : 'Fundamentals / expectation gap',
+      time: 'live',
+      positive: /beat|\+/i.test(fundData.expectationGap.summary),
+      warning: /miss|-/i.test(fundData.expectationGap.summary),
+    });
+  } else if (fundData?.rangePosition?.summary) {
+    list.push({
+      icon: '◉',
+      title: fundData.rangePosition.summary,
+      source: 'Fundamentals · 52w range',
+      time: 'live',
+      blue: true,
+    });
+  }
+
   const skillFindings = findings.filter((f) =>
-    ['news', 'market', 'macro', 'sentiment', 'technical', 'historical'].includes(
+    ['news', 'market', 'macro', 'sentiment', 'technical', 'fundamentals', 'historical'].includes(
       f.category,
     ),
   );

@@ -271,6 +271,87 @@ export class ReviewService {
       });
     }
 
+    // --- Track 3 / S2: Reality basis, similar scenarios, fundamentals ---
+    const marketFinding = findings.find((f) => f.category === 'market');
+    const marketData = (marketFinding?.data ?? null) as {
+      globalStats?: {
+        venue?: string;
+        rTokenVsCashPct?: number | null;
+        rTokenSymbol?: string;
+      };
+    } | null;
+    const stats = marketData?.globalStats;
+    const vsCash = Number(stats?.rTokenVsCashPct);
+    if (
+      stats?.venue === 'bitget-reality' &&
+      Number.isFinite(vsCash) &&
+      Math.abs(vsCash) >= 0.4 &&
+      !/basis|vs cash|rToken.*cash|premium|discount/i.test(
+        `${rationale} ${findings.map((f) => f.statement).join(' ')}`,
+      )
+    ) {
+      patterns.push({
+        id: 'rtoken-basis-ignored',
+        message: `${stats.rTokenSymbol ?? 'rToken'} trades ${vsCash >= 0 ? '+' : ''}${vsCash.toFixed(2)}% vs cash equity but the thesis never prices the basis / closed-market arb risk — for S2 this is the core rToken differentiator.`,
+      });
+    }
+
+    const similarFinding = findings.find(
+      (f) =>
+        f.category === 'historical' &&
+        /similar scenario/i.test(f.title ?? ''),
+    );
+    const similarData = (similarFinding?.data ?? null) as {
+      matches?: Array<{ return5dPct?: number | null; similarityScore?: number }>;
+    } | null;
+    const worstFwd = (similarData?.matches ?? [])
+      .map((m) => Number(m.return5dPct))
+      .filter((n) => Number.isFinite(n));
+    if (
+      thesis &&
+      thesis.direction === 'long' &&
+      thesis.confidence >= 0.65 &&
+      worstFwd.length &&
+      Math.min(...worstFwd) <= -5 &&
+      !/similar scenario|historical regime|shock-selloff/i.test(rationale)
+    ) {
+      patterns.push({
+        id: 'ignored-similar-selloff',
+        message: `Similar historical regimes include a forward 5d drawdown of ${Math.min(...worstFwd).toFixed(1)}% but the long thesis does not reconcile against those analogs — Decision Stress Testing incomplete.`,
+      });
+    }
+
+    const fundFinding = findings.find((f) => f.category === 'fundamentals');
+    const fundData = (fundFinding?.data ?? null) as {
+      expectationGap?: { summary?: string } | null;
+      applicable?: boolean;
+    } | null;
+    if (
+      fundFinding &&
+      fundData?.applicable !== false &&
+      !fundData?.expectationGap &&
+      /earnings|eps|guidance|beat|miss/i.test(rationale)
+    ) {
+      patterns.push({
+        id: 'earnings-claim-no-gap',
+        message:
+          'Thesis language implies an earnings / expectation story but no quantified EPS/guidance gap was extracted — name the beat/miss or drop the claim.',
+      });
+    }
+
+    if (
+      thesis &&
+      thesis.confidence >= 0.75 &&
+      !similarFinding &&
+      skillsCompleted >= 4
+    ) {
+      patterns.push({
+        id: 'no-similar-scenario-check',
+        message:
+          'High-confidence thesis locked without retrieving historically similar scenarios — run Decision Stress Testing analogs before sizing.',
+      });
+    }
+
     return patterns;
   }
 
@@ -283,6 +364,14 @@ export class ReviewService {
     list.push({
       check: 'Does the transmission chain link the catalyst to the asset, and hold across the 7×24 rToken window (weekend macro event while the US exchange is closed)?',
       why: 'Rate → flows → asset, or state "unclear". Do not imply one from vibes.',
+    });
+    list.push({
+      check: 'Did you price Bitget Reality rToken vs cash equity basis (and closed-market risk)?',
+      why: 'S2 differentiator: 7×24 on-chain quote can diverge while NYSE is shut.',
+    });
+    list.push({
+      check: 'Did similar historical regimes support the direction and size?',
+      why: 'Analogs with ugly forward returns should cut size or flip bias.',
     });
     if (patterns.some((p) => p.id === 'stop-tighter-than-drawdown'))
       list.push({

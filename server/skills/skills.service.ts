@@ -4,6 +4,7 @@ import { MarketSkill } from './market.skill';
 import { MacroSkill } from './macro.skill';
 import { SentimentSkill } from './sentiment.skill';
 import { TechnicalSkill } from './technical.skill';
+import { FundamentalsSkill } from './fundamentals.skill';
 import { ResearchSkill } from './base.skill';
 import { ResearchContext, SkillResult } from './skill.types';
 
@@ -19,6 +20,7 @@ export class SkillsService {
     private readonly macroSkill: MacroSkill,
     private readonly sentimentSkill: SentimentSkill,
     private readonly technicalSkill: TechnicalSkill,
+    private readonly fundamentalsSkill: FundamentalsSkill,
   ) {}
 
   get all(): ResearchSkill[] {
@@ -28,6 +30,7 @@ export class SkillsService {
       this.macroSkill,
       this.sentimentSkill,
       this.technicalSkill,
+      this.fundamentalsSkill,
     ];
   }
 

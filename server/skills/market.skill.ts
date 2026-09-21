@@ -7,11 +7,10 @@ import { parseMcpJson } from './mcp.util';
 
 /**
  * Market skill - market structure and institutional/flow activity. This
- * workbench is US-stock-first: for stock/rToken research it goes straight
- * to a live quote (Bitget/Yahoo via MarketDataService) rather than a
- * crypto-market dashboard. Crypto research (when explicitly detected) still
- * uses the Bitget datahub MCP `crypto_market` (CoinGecko) + `network_status`
- * on-chain tools.
+ * workbench is US-stock / rToken-first: primary quote is Bitget Reality
+ * (r*USDT), with a thin cash-equity compare (Yahoo/MCP). Crypto research
+ * (when explicitly detected) still uses Bitget datahub MCP `crypto_market`
+ * + `network_status`.
  */
 @Injectable()
 export class MarketSkill extends BaseSkill {
@@ -69,19 +68,40 @@ export class MarketSkill extends BaseSkill {
       }
     }
 
-    // Stock path (and crypto fallback): live quote for the primary symbol.
+    // Stock / rToken path (and crypto fallback): live quote for the primary symbol.
     try {
       const lead = context.symbols[0] ?? (isStock ? 'SPY' : 'BTC');
       const ticker = await this.marketData.getTicker(lead);
       if (ticker.last > 0) {
-        this.lastSource = 'live-quote';
+        this.lastSource =
+          ticker.venue === 'bitget-reality'
+            ? 'bitget-reality'
+            : ticker.venue === 'yahoo' || ticker.venue === 'mcp'
+              ? `cash-${ticker.venue}`
+              : 'live-quote';
+        const cash = ticker.cashEquity;
+        let vsCashPct: number | null = null;
+        if (cash && cash.last > 0 && ticker.venue === 'bitget-reality') {
+          vsCashPct = ((ticker.last - cash.last) / cash.last) * 100;
+        }
         return {
           symbol: lead,
+          rTokenSymbol: ticker.rTokenSymbol ?? null,
           price: ticker.last,
           change_24h: ticker.change24h ?? 0,
           high_24h: ticker.high24h,
           low_24h: ticker.low24h,
           volume_24h: ticker.volume24h,
+          venue: ticker.venue ?? null,
+          cashEquity: cash
+            ? {
+                symbol: cash.symbol,
+                price: cash.last,
+                change_24h: cash.change24h ?? null,
+                source: cash.source,
+              }
+            : null,
+          rTokenVsCashPct: vsCashPct,
         };
       }
     } catch {
@@ -96,16 +116,22 @@ export class MarketSkill extends BaseSkill {
     const out: Array<Record<string, unknown>> = [];
     for (const symbol of context.symbols.slice(0, 3)) {
       const ticker = await this.marketData.getTicker(symbol);
+      const cash = ticker.cashEquity;
       out.push({
         symbol,
+        rTokenSymbol: ticker.rTokenSymbol ?? null,
         lastPrice: ticker.last,
         volume24h: ticker.volume24h,
         high24h: ticker.high24h,
         low24h: ticker.low24h,
-        // Structure-level estimates; institutional-grade feeds plug in here.
+        venue: ticker.venue ?? null,
+        cashLast: cash?.last ?? null,
         etfFlow24h: null,
         exchangeNetFlow24h: null,
-        note: 'Retail/derivatives estimate based on live ticker; deeper flow/positioning data pending.',
+        note:
+          ticker.venue === 'bitget-reality'
+            ? 'Primary: Bitget Reality rToken. Cash equity shown for closed-market / basis compare.'
+            : 'Live ticker; Reality rToken listing unavailable for this symbol.',
       });
     }
     return out;

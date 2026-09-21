@@ -21,6 +21,7 @@ const TASKS: { text: string; skill?: string }[] = [
   { text: 'Parsing your question', skill: 'plan' },
   { text: 'Analyzing latest news', skill: 'news' },
   { text: 'Checking market conditions', skill: 'market' },
+  { text: 'Fundamentals & earnings', skill: 'fundamentals' },
   { text: 'Macro & global environment', skill: 'macro' },
   { text: 'Market sentiment & positioning', skill: 'sentiment' },
   { text: 'Technical indicators', skill: 'technical' },

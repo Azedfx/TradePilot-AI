@@ -6,10 +6,11 @@ pipeline (news, market, macro, sentiment, technical) to produce an investment
 thesis with historical scenarios, stress tests, and a self-evolution review —
 while a human trader makes the final call.
 
-Built for **Bitget AI Base Camp Hackathon S2 — Track 3: AI Trading Desk (AI
-Research Workbench)**, sub-theme **Review & Self-Evolution** — *"After
-trading, how does AI help the trader review and iterate their research
-framework?"*
+Built for **Bitget AI Base Camp Hackathon S2 — Track 3: AI Trading Desk**,
+sub-theme **Review & Self-Evolution**.
+
+**For judges / submission:** see [`HACKATHON.md`](./HACKATHON.md) (Demo script,
+Google Form copy, X post checklist, metrics endpoint).
 
 The self-evolution loop lives in `server/review/` + `src/components/research/SelfReview.tsx`:
 after a research run completes, it auto-generates a review report that (1)
@@ -38,7 +39,7 @@ server/            NestJS API, served on :3000 (proxied by Next.js under /api)
   analysis/         thesis, historical, stress-test services
   review/           self-evolution review (bad-decision patterns + reusable checklist)
   llm/              llm.service (Qwen via Bitget hackathon proxy, placeholder fallback)
-  market-data/      market-data.service, MCP client (Bitget datahub)
+  market-data/      market-data.service, dual MCP (bitget-signal + bitget-mcp-server)
   reports/          report.service
   db/               Prisma service, repository, module
   prisma/           schema.prisma (PostgreSQL)
@@ -105,8 +106,10 @@ POST /api/research
 - `LLM_PROVIDER` — `qwen` when `QWEN_API_KEY` is set, otherwise a
   deterministic placeholder so the app runs without keys. Swap in another
   provider in `server/llm/llm.service.ts`.
-- `MCP_URL` — Bitget datahub MCP server for macro/market/stock data
-  (`server/market-data/mcp-client.service.ts`); skills fall back to direct
+- `MCP_URL` — bitget-signal (datahub) for macro/news/sentiment/TA
+- `BITGET_US_MCP_URL` — bitget-mcp-server (agent.bitget.com) for US quotes/fundamentals;
+  falls back to signal / Reality / Yahoo when unreachable
+  (`server/market-data/`); skills fall back to direct
   APIs (Bitget, Yahoo Finance) if MCP is unavailable.
 - The `server/skills/*` classes are where additional real-time data
   providers plug in.

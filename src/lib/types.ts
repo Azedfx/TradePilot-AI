@@ -1,3 +1,10 @@
+export interface CashEquityRef {
+  symbol: string;
+  last: number;
+  change24h?: number;
+  source: 'yahoo' | 'mcp' | 'bitget-mcp-server';
+}
+
 export interface MarketSnapshot {
   symbol: string;
   price: number;
@@ -6,6 +13,10 @@ export interface MarketSnapshot {
   low24h: number;
   volume24h: number;
   assetType: string;
+  venue?: string;
+  rTokenSymbol?: string;
+  cashEquity?: CashEquityRef | null;
+  rTokenVsCashPct?: number | null;
 }
 
 export type Direction = 'long' | 'short' | 'neutral';
@@ -67,6 +78,19 @@ export interface HistoricalStats {
   statement?: string;
 }
 
+export interface HistoricalMatchView {
+  id: string;
+  similarityScore: number;
+  similarityExplanation?: string | null;
+  eventType?: string | null;
+  eventDate?: string | null;
+  symbol?: string | null;
+  return1dPct?: number | null;
+  return5dPct?: number | null;
+  return20dPct?: number | null;
+  volatility20d?: number | null;
+}
+
 export interface FindingView {
   category: string;
   title: string;
@@ -125,7 +149,7 @@ export interface ResearchSessionResponse extends ResearchResponse {
   assetType: string | null;
   skills: SkillRunView[];
   historicalStats?: HistoricalStats[];
-  historicalMatches?: unknown[];
+  historicalMatches?: HistoricalMatchView[];
   findings?: FindingView[];
   messages?: unknown[];
   report?: string | null;

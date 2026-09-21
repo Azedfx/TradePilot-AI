@@ -87,7 +87,11 @@ function AssetCard({
         <AssetLogo type={symbol.toLowerCase()} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold text-[#e3ebf4]">{symbol}</p>
-          <p className="text-[8px] text-[#73869e]">US Stock</p>
+          <p className="text-[8px] text-[#73869e]">
+            {snapshot?.venue === 'bitget-reality'
+              ? `Bitget Reality · ${snapshot.rTokenSymbol ?? `r${symbol}USDT`}`
+              : 'US Stock'}
+          </p>
         </div>
       </div>
 

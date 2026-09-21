@@ -178,7 +178,7 @@ export class StressTestService {
       2,
       Math.min(20, Math.round((1 - thesis.confidence) * 30)),
     );
-    return `Based on live ${vol.sampleSize}-day volatility of ${(
+    return `Based on live Bitget Reality ${vol.sampleSize}-day volatility of ${(
       vol.annualizedVol * 100
     ).toFixed(1)}% annualized for ${symbol}, scenario drawdowns range from ` +
       `${(worstShock * 100).toFixed(1)}% to -${(stop * 100).toFixed(1)}%. ` +

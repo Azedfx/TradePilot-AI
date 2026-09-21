@@ -4,6 +4,7 @@ import { MarketSkill } from './market.skill';
 import { MacroSkill } from './macro.skill';
 import { SentimentSkill } from './sentiment.skill';
 import { TechnicalSkill } from './technical.skill';
+import { FundamentalsSkill } from './fundamentals.skill';
 import { SkillsService } from './skills.service';
 import { MarketDataModule } from '../market-data/market-data.module';
 
@@ -15,6 +16,7 @@ import { MarketDataModule } from '../market-data/market-data.module';
     MacroSkill,
     SentimentSkill,
     TechnicalSkill,
+    FundamentalsSkill,
     SkillsService,
   ],
   exports: [
@@ -24,6 +26,7 @@ import { MarketDataModule } from '../market-data/market-data.module';
     MacroSkill,
     SentimentSkill,
     TechnicalSkill,
+    FundamentalsSkill,
   ],
 })
 export class SkillsModule {}

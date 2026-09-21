@@ -47,7 +47,7 @@ export class TechnicalSkill extends BaseSkill {
       (!context?.assetType &&
         this.marketData.assetTypeOf(symbol) === 'us-stock');
 
-    // US stocks: compute locally from live Yahoo OHLCV (no crypto-style MCP).
+    // US stocks / rTokens: Bitget Reality OHLCV first, cash equity as fallback.
     if (isStock) {
       try {
         const candles = await this.marketData.getStockCandles(
@@ -57,8 +57,20 @@ export class TechnicalSkill extends BaseSkill {
         );
         if (candles.length > 0) {
           const source = this.marketData.stockCandleSource();
-          this.lastSource = source === 'mcp' ? 'mcp-global-assets' : 'yahoo-finance';
-          return this.computeLocal(symbol, timeframe, candles);
+          this.lastSource =
+            source === 'bitget-reality'
+              ? 'bitget-reality'
+              : source === 'bitget-mcp-server'
+                ? 'bitget-mcp-server'
+                : source === 'mcp'
+                  ? 'bitget-signal'
+                  : 'yahoo-finance';
+          const setup = this.computeLocal(symbol, timeframe, candles);
+          if (source === 'bitget-reality') {
+            setup.rTokenSymbol = this.marketData.realitySymbol(symbol);
+            setup.venue = 'bitget-reality';
+          }
+          return setup;
         }
       } catch {
         // ignore

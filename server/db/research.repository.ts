@@ -19,7 +19,7 @@ export type SessionWithRelations = Prisma.ResearchSessionGetPayload<{
     skillRuns: true;
     findings: true;
     messages: true;
-    historicalMatches: true;
+    historicalMatches: { include: { historicalEvent: true } };
     thesis: { include: { stressTests: true } };
   };
 }>;
@@ -100,7 +100,7 @@ export class ResearchRepository {
         skillRuns: true,
         findings: true,
         messages: true,
-        historicalMatches: true,
+        historicalMatches: { include: { historicalEvent: true } },
         thesis: { include: { stressTests: true } },
       },
     });
@@ -232,6 +232,69 @@ export class ResearchRepository {
     return withPoolRetry(() => this.prisma.historicalMatch.create({ data }));
   }
 
+  /** Upsert a mined historical regime event (unique enough by symbol+type+date). */
+  async upsertHistoricalEvent(data: {
+    symbol: string;
+    eventType: string;
+    eventDate: Date;
+    rsi?: number;
+    priceVs200maPct?: number;
+    return1dPct?: number;
+    return5dPct?: number;
+    return20dPct?: number;
+    volatility20d?: number;
+    metadata?: Record<string, unknown>;
+  }) {
+    return withPoolRetry(async () => {
+      const existing = await this.prisma.historicalEvent.findFirst({
+        where: {
+          symbol: data.symbol,
+          eventType: data.eventType,
+          eventDate: data.eventDate,
+        },
+      });
+      if (existing) {
+        return this.prisma.historicalEvent.update({
+          where: { id: existing.id },
+          data: {
+            rsi: data.rsi,
+            priceVs200maPct: data.priceVs200maPct,
+            return1dPct: data.return1dPct,
+            return5dPct: data.return5dPct,
+            return20dPct: data.return20dPct,
+            volatility20d: data.volatility20d,
+            metadata: data.metadata as object | undefined,
+          },
+        });
+      }
+      return this.prisma.historicalEvent.create({
+        data: {
+          symbol: data.symbol,
+          eventType: data.eventType,
+          eventDate: data.eventDate,
+          rsi: data.rsi,
+          priceVs200maPct: data.priceVs200maPct,
+          return1dPct: data.return1dPct,
+          return5dPct: data.return5dPct,
+          return20dPct: data.return20dPct,
+          volatility20d: data.volatility20d,
+          metadata: data.metadata as object | undefined,
+        },
+      });
+    });
+  }
+
+  async listHistoricalMatches(sessionId: string) {
+    return withPoolRetry(() =>
+      this.prisma.historicalMatch.findMany({
+        where: { sessionId },
+        include: { historicalEvent: true },
+        orderBy: { similarityScore: 'desc' },
+        take: 8,
+      }),
+    );
+  }
+
   async saveThesis(data: {
     sessionId: string;
     symbol: string;
@@ -338,5 +401,40 @@ export class ResearchRepository {
         },
       }),
     );
+  }
+
+  /** Aggregate Demo validation metrics for the hackathon submission form. */
+  async demoMetrics() {
+    const [sessions, completed, failed, decisions, skillRuns, reviews] =
+      await Promise.all([
+        this.prisma.researchSession.count(),
+        this.prisma.researchSession.count({
+          where: { status: ResearchStatus.COMPLETED },
+        }),
+        this.prisma.researchSession.count({
+          where: { status: ResearchStatus.FAILED },
+        }),
+        this.prisma.finding.count({ where: { category: 'decision' } }),
+        this.prisma.skillRun.count({
+          where: { status: SkillRunStatus.COMPLETED },
+        }),
+        this.prisma.finding.count({ where: { category: 'review' } }),
+      ]);
+    const completionRate =
+      sessions > 0 ? Math.round((completed / sessions) * 1000) / 10 : 0;
+    return {
+      generatedAt: new Date().toISOString(),
+      track: 'AI Trading Desk (Track 3)',
+      theme: 'Review & Self-Evolution',
+      researchSessions: sessions,
+      completedSessions: completed,
+      failedSessions: failed,
+      completionRatePct: completionRate,
+      humanDecisions: decisions,
+      skillRunsCompleted: skillRuns,
+      selfEvolutionReviews: reviews,
+      note:
+        'Observed Demo metrics. Label as observed in the Google Form validation section.',
+    };
   }
 }

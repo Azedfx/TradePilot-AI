@@ -13,7 +13,7 @@ web in one service** so a single public URL serves the dashboard and proxies
    - `tradepilot-db` (free Postgres)
    - `tradepilot-ai` (Next.js + NestJS; `prisma db push` on boot)
 3. Render will prompt for env vars marked `sync: false`. Set `QWEN_API_KEY`
-   (and optionally `MCP_URL`). Leave `PORT` unset — Render injects it.
+   (and optionally `MCP_URL` / `BITGET_US_MCP_URL`). Leave `PORT` unset — Render injects it.
 4. After deploy, open the **service root URL** (not `/api`) — that is your
    Accessible Demo link. Health check: `/api/health`.
 
@@ -51,7 +51,8 @@ If you'd rather use Vercel for the frontend specifically:
 | `QWEN_API_KEY` | From the S2 Qwen Token application; without it the LLM falls back to a placeholder |
 | `QWEN_BASE_URL` | `https://hackathon.bitgetops.com/v1` |
 | `QWEN_MODEL` | `qwen3.8-max` |
-| `MCP_URL` | Optional; Bitget datahub MCP server for macro/market data |
+| `MCP_URL` | Optional; bitget-signal datahub MCP (macro/news/sentiment/TA) |
+| `BITGET_US_MCP_URL` | Optional; bitget-mcp-server US quotes/fundamentals (`https://agent.bitget.com/mcp`) |
 | `BACKEND_URL` | Same-box: `http://127.0.0.1:3000`. Split deploy: public API URL |
 | `CORS_ORIGIN` | Public demo URL (less critical when Next proxies `/api` same-origin) |
 | `PORT` | Set automatically by the host — **do not hardcode `3000` on Render** |

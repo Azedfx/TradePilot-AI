@@ -3,6 +3,7 @@
 import {
   Activity,
   BarChart3,
+  Building2,
   ChevronDown,
   ExternalLink,
   Gauge,
@@ -30,8 +31,14 @@ const SKILLS: {
   {
     name: 'Market Intel',
     key: 'market',
-    description: 'Market and institutional intelligence',
+    description: 'Bitget Reality rToken + cash compare',
     icon: <BarChart3 size={16} />,
+  },
+  {
+    name: 'Fundamentals',
+    key: 'fundamentals',
+    description: 'Earnings gap, 52w range, Reality vs cash',
+    icon: <Building2 size={16} />,
   },
   {
     name: 'Sentiment Analyst',
@@ -329,14 +336,19 @@ function extractSkillDetail(
     const rows: { label: string; value: string }[] = [];
 
     const symbol = pick(lead ?? undefined, ['symbol']);
+    const rToken = pick(lead ?? undefined, ['rTokenSymbol']);
     const price = pick(lead ?? undefined, ['price', 'lastPrice']);
     const change = pick(lead ?? undefined, ['change_24h', 'change24h']);
     const high = pick(lead ?? undefined, ['high_24h', 'high24h']);
     const low = pick(lead ?? undefined, ['low_24h', 'low24h']);
     const volume = pick(lead ?? undefined, ['volume_24h', 'volume24h']);
+    const venue = pick(lead ?? undefined, ['venue']);
+    const cash = (lead?.cashEquity ?? null) as Record<string, unknown> | null;
+    const vsCash = pick(lead ?? undefined, ['rTokenVsCashPct']);
 
     if (symbol != null) rows.push({ label: 'Symbol', value: String(symbol) });
-    if (money(price)) rows.push({ label: 'Last', value: money(price)! });
+    if (rToken != null) rows.push({ label: 'rToken', value: String(rToken) });
+    if (money(price)) rows.push({ label: 'Last (Reality)', value: money(price)! });
     if (pct(change)) rows.push({ label: '24h change', value: pct(change)! });
     if (money(high)) rows.push({ label: '24h high', value: money(high)! });
     if (money(low)) rows.push({ label: '24h low', value: money(low)! });
@@ -346,7 +358,72 @@ function extractSkillDetail(
         value: num(volume)!.toLocaleString(),
       });
     }
-    if (data.source) rows.push({ label: 'Source', value: String(data.source) });
+    if (cash && money(cash.price ?? cash.last)) {
+      rows.push({
+        label: 'Cash equity',
+        value: `${money(cash.price ?? cash.last)}${cash.source ? ` (${cash.source})` : ''}`,
+      });
+    }
+    if (pct(vsCash)) {
+      rows.push({ label: 'rToken vs cash', value: pct(vsCash)! });
+    }
+    if (venue != null) rows.push({ label: 'Venue', value: String(venue) });
+    else if (data.source) rows.push({ label: 'Source', value: String(data.source) });
+    if (rows.length) return { kind: 'rows', items: rows };
+  }
+
+  if (skillKey === 'fundamentals' && data) {
+    const rows: { label: string; value: string }[] = [];
+    if (data.applicable === false) {
+      rows.push({ label: 'Scope', value: 'US equities only' });
+      return { kind: 'rows', items: rows };
+    }
+    if (data.symbol) rows.push({ label: 'Symbol', value: String(data.symbol) });
+    if (data.rTokenSymbol) {
+      rows.push({ label: 'rToken', value: String(data.rTokenSymbol) });
+    }
+    if (money(data.lastPrice)) {
+      rows.push({ label: 'Last', value: money(data.lastPrice)! });
+    }
+    const gap = data.expectationGap as { summary?: string } | null;
+    if (gap?.summary) rows.push({ label: 'Expectation gap', value: gap.summary });
+    const range = data.rangePosition as { summary?: string } | null;
+    if (range?.summary) rows.push({ label: '52w position', value: range.summary });
+    if (pct(data.rTokenVsCashPct)) {
+      rows.push({ label: 'rToken vs cash', value: pct(data.rTokenVsCashPct)! });
+    }
+    const meta = data.quoteMeta as Record<string, unknown> | null;
+    if (meta?.fiftyTwoWeekHigh != null) {
+      rows.push({
+        label: '52w high',
+        value: money(meta.fiftyTwoWeekHigh) ?? String(meta.fiftyTwoWeekHigh),
+      });
+    }
+    if (meta?.fiftyTwoWeekLow != null) {
+      rows.push({
+        label: '52w low',
+        value: money(meta.fiftyTwoWeekLow) ?? String(meta.fiftyTwoWeekLow),
+      });
+    }
+    const companyNews = Array.isArray(data.companyNews)
+      ? (data.companyNews as Array<Record<string, unknown>>)
+      : [];
+    for (const n of companyNews.slice(0, 2)) {
+      const title = String(n.headline ?? n.title ?? '').trim();
+      if (title) rows.push({ label: 'Company news', value: title.slice(0, 120) });
+    }
+    if (typeof data.wiki === 'string' && data.wiki.trim()) {
+      rows.push({ label: 'Company', value: data.wiki.slice(0, 220) });
+    }
+    if (data.source) {
+      rows.push({
+        label: 'Source',
+        value:
+          data.source === 'finnhub'
+            ? 'Finnhub earnings (EPS actual vs estimate)'
+            : String(data.source),
+      });
+    }
     if (rows.length) return { kind: 'rows', items: rows };
   }
 
@@ -372,6 +449,8 @@ function extractSkillDetail(
         Symbol: String(s.symbol ?? 'Asset'),
         Trend: trend,
       };
+      if (s.rTokenSymbol) item.rToken = String(s.rTokenSymbol);
+      if (s.venue) item.Venue = String(s.venue);
       if (money(s.lastPrice)) item.Price = money(s.lastPrice)!;
       if (rsiVal != null) {
         item.RSI = `${rsiVal.toFixed(1)}${rsiSignal ? ` (${rsiSignal})` : ''}`;

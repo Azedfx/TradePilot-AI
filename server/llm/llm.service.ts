@@ -10,6 +10,10 @@ export interface LlmOptions {
   maxTokens?: number;
   model?: string;
   jsonMode?: boolean;
+  /** Per-call timeout override (ms). Default 45s for desk responsiveness. */
+  timeoutMs?: number;
+  /** Max attempts override (default 2). */
+  maxAttempts?: number;
 }
 
 export interface LlmProviderConfig {
@@ -18,7 +22,7 @@ export interface LlmProviderConfig {
   model: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 300_000;
+const DEFAULT_TIMEOUT_MS = 45_000;
 
 /**
  * LLM service - centralised interface to the language model provider.
@@ -72,7 +76,7 @@ export class LlmService {
       throw new Error('QWEN_API_KEY is required for the qwen provider.');
     }
 
-    const maxAttempts = 3;
+    const maxAttempts = options.maxAttempts ?? 2;
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -85,7 +89,7 @@ export class LlmService {
         if (attempt === maxAttempts || !retriable) {
           throw lastError;
         }
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        await new Promise((r) => setTimeout(r, 800 * attempt));
       }
     }
     throw lastError;
@@ -97,7 +101,8 @@ export class LlmService {
     options: LlmOptions,
   ): Promise<string> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(

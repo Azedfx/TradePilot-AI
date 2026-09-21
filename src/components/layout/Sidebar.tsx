@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ViewId } from '@/lib/research-context';
+import { DemoMetricsPanel } from '../research/DemoMetricsPanel';
 
 const NAV_ITEMS: { view: ViewId; icon: ReactNode; label: string }[] = [
   { view: 'home', icon: <Home size={17} />, label: 'Home' },
@@ -43,6 +44,8 @@ export function Sidebar({
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        <DemoMetricsPanel />
 
         {/* Tagline */}
         <div className="mx-4 mb-6 rounded-lg border border-[#163755] bg-[#082039] p-3">

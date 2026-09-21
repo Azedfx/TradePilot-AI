@@ -2,13 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ResearchStatus, ThesisBias } from '../generated/prisma/client';
 import { ResearchRepository } from '../db/research.repository';
 import { SkillsService } from '../skills/skills.service';
-import { ResearchContext, SkillResult } from '../skills/skill.types';
+import { DeskPreferences, ResearchContext, SkillResult } from '../skills/skill.types';
 import { ThesisService } from '../analysis/thesis.service';
 import { HistoricalService, HistoricalStats } from '../analysis/historical.service';
 import { StressTestService } from '../analysis/stress-test.service';
+import { SimilarScenariosService } from '../analysis/similar-scenarios.service';
 import { ReportService } from '../reports/report.service';
+import { ReviewService } from '../review/review.service';
 import { LlmService } from '../llm/llm.service';
-import { MarketDataService, MarketSnapshot } from '../market-data/market-data.service';
+import { MarketDataService } from '../market-data/market-data.service';
 import { detectAssetType, detectSymbols } from './symbol-detector';
 
 export interface ResearchRequest {
@@ -17,6 +19,7 @@ export interface ResearchRequest {
   symbols?: string[];
   timeframe?: string;
   assetType?: 'crypto' | 'us-stock';
+  preferences?: DeskPreferences;
 }
 
 export interface ResearchLaunch {
@@ -47,7 +50,9 @@ export class ResearchOrchestrator {
     private readonly thesisService: ThesisService,
     private readonly historicalService: HistoricalService,
     private readonly stressTestService: StressTestService,
+    private readonly similarScenarios: SimilarScenariosService,
     private readonly reportService: ReportService,
+    private readonly reviewService: ReviewService,
     private readonly llm: LlmService,
     private readonly marketData: MarketDataService,
   ) {}
@@ -77,6 +82,8 @@ export class ResearchOrchestrator {
       symbols,
       timeframe: request.timeframe ?? '1d',
       assetType,
+      preferences: request.preferences,
+      question: request.question,
     };
 
     void this.process(session.id, context).catch((error) => {
@@ -101,9 +108,9 @@ export class ResearchOrchestrator {
 
     await this.updateStatus(sessionId, ResearchStatus.ANALYZING);
 
-    // 3. Thesis + historical + stress tests
+    // 3. Thesis + historical + stress tests + similar scenarios
     const symbols = context.symbols;
-    const thesis = await this.thesisService.build(skillResults, symbols);
+    const thesis = await this.thesisService.build(skillResults, symbols, context);
     const stressTests = await this.stressTestService.run(
       thesis,
       symbols.slice(0, 1),
@@ -143,6 +150,32 @@ export class ResearchOrchestrator {
       }
     } catch (error) {
       this.logger.warn(`Historical stats unavailable: ${String(error)}`);
+    }
+
+    // 3c. Similar historical regimes (shock rallies / selloffs) for stress
+    // context — handbook Track 3 "retrieve historically similar scenarios".
+    try {
+      const lead = symbols[0];
+      if (lead) {
+        const matches = await this.similarScenarios.findAndAttach(
+          sessionId,
+          lead,
+          5,
+        );
+        if (matches.length) {
+          await this.repo.saveFinding({
+            sessionId,
+            category: 'historical',
+            title: `Similar scenarios for ${lead}`,
+            statement: `Found ${matches.length} historically similar regime(s). Closest: ${matches[0].similarityExplanation}`,
+            importance: 'high',
+            sentiment: 'neutral',
+            data: { matches },
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`Similar scenarios unavailable: ${String(error)}`);
     }
 
     try {
@@ -216,6 +249,22 @@ export class ResearchOrchestrator {
     });
 
     await this.updateStatus(sessionId, ResearchStatus.COMPLETED);
+
+    // Auto self-evolution review so Track 3 Demo always shows the theme
+    // without an extra click — failures must not fail the research run.
+    try {
+      await this.reviewService.review(sessionId);
+      await this.repo.addMessage({
+        sessionId,
+        role: 'assistant',
+        content:
+          'Self-evolution review ready — bad patterns, recurrence, and next-idea checklist.',
+        toolName: 'review',
+        metadata: { category: 'self-evolution-review' },
+      });
+    } catch (error) {
+      this.logger.warn(`Auto-review skipped: ${String(error)}`);
+    }
   }
 
   private async plan(
@@ -225,17 +274,36 @@ export class ResearchOrchestrator {
     const objective = `Research ${context.symbols.join(', ')} on the ${
       context.timeframe
     } timeframe.`;
-    const skills = this.skills.all.map((s) => s.name);
+    let skills = this.skills.all.map((s) => s.name);
+    const emphasize = context.preferences?.emphasizeSkills ?? [];
+    if (emphasize.length) {
+      const set = new Set(emphasize.map(String));
+      skills = [
+        ...emphasize.filter((s) => skills.includes(s)),
+        ...skills.filter((s) => !set.has(s)),
+      ];
+    }
+    const focus = context.preferences?.focus;
     const questions = [
       'What are the current catalysts and narratives?',
-      'What is the technical structure and trend?',
-      'What is sentiment and derivatives positioning?',
+      focus === 'technical'
+        ? 'What is the technical structure and key levels?'
+        : focus === 'macro'
+          ? 'What does the macro transmission chain imply for this asset?'
+          : focus === 'earnings'
+            ? 'What is the earnings / expectation gap?'
+            : focus === 'rToken'
+              ? 'How does Bitget Reality rToken pricing diverge from cash equity across the 7×24 window?'
+              : 'What is the technical structure and trend?',
+      'What is sentiment and positioning?',
       'What does the macro backdrop imply for risk?',
     ];
     await this.repo.addMessage({
       sessionId,
       role: 'assistant',
-      content: `Investigating ${context.symbols.join(', ')} using ${skills.join(', ')}.`,
+      content: `Investigating ${context.symbols.join(', ')} using ${skills.join(', ')}${
+        focus && focus !== 'balanced' ? ` (focus: ${focus})` : ''
+      }.`,
     });
     return { objective, skills, questions };
   }

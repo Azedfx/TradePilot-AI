@@ -8,9 +8,10 @@ import {
   Newspaper,
   Sparkles,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
+import { loadDeskPreferences, saveDeskPreferences } from '@/lib/api';
 
 const EXAMPLES = [
   { text: 'NVDA after earnings', prompt: 'Should I consider buying NVDA after earnings?' },
@@ -21,6 +22,22 @@ const EXAMPLES = [
 
 export function HeroSection() {
   const { question, setQuestion, runResearch, running } = useResearch();
+  const [riskAppetite, setRiskAppetite] = useState<
+    'conservative' | 'balanced' | 'aggressive'
+  >('balanced');
+  const [focus, setFocus] = useState<
+    'earnings' | 'macro' | 'technical' | 'rToken' | 'balanced'
+  >('balanced');
+
+  useEffect(() => {
+    const prefs = loadDeskPreferences();
+    if (prefs.riskAppetite) setRiskAppetite(prefs.riskAppetite);
+    if (prefs.focus) setFocus(prefs.focus);
+  }, []);
+
+  useEffect(() => {
+    saveDeskPreferences({ riskAppetite, focus });
+  }, [riskAppetite, focus]);
 
   const submit = () => {
     void runResearch();
@@ -87,6 +104,48 @@ export function HeroSection() {
           >
             <ArrowRight size={18} />
           </button>
+        </div>
+
+        <div className="mt-3 flex max-w-140 flex-wrap gap-3 text-[8px] text-[#8fa2b7]">
+          <label className="flex items-center gap-1.5">
+            Risk
+            <select
+              value={riskAppetite}
+              onChange={(e) =>
+                setRiskAppetite(
+                  e.target.value as 'conservative' | 'balanced' | 'aggressive',
+                )
+              }
+              className="rounded border border-[#355c83] bg-[#0b1d34] px-1.5 py-1 text-[#d7e4f3] outline-none"
+            >
+              <option value="conservative">Conservative</option>
+              <option value="balanced">Balanced</option>
+              <option value="aggressive">Aggressive</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5">
+            Focus
+            <select
+              value={focus}
+              onChange={(e) =>
+                setFocus(
+                  e.target.value as
+                    | 'earnings'
+                    | 'macro'
+                    | 'technical'
+                    | 'rToken'
+                    | 'balanced',
+                )
+              }
+              className="rounded border border-[#355c83] bg-[#0b1d34] px-1.5 py-1 text-[#d7e4f3] outline-none"
+            >
+              <option value="balanced">Balanced</option>
+              <option value="earnings">Earnings</option>
+              <option value="macro">Macro</option>
+              <option value="technical">Technical</option>
+              <option value="rToken">rToken / 7×24</option>
+            </select>
+          </label>
         </div>
 
         {/* Examples */}

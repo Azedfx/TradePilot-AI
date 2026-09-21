@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { XMLParser } from 'fast-xml-parser';
 import { McpClientService } from './mcp-client.service';
+import { UsStockMcpClientService } from './us-stock-mcp.service';
 
 export interface Candle {
   ts: number;
@@ -9,6 +10,22 @@ export interface Candle {
   low: number;
   close: number;
   volume: number;
+}
+
+export type MarketVenue =
+  | 'bitget-reality'
+  | 'yahoo'
+  | 'mcp'
+  | 'bitget-mcp-server'
+  | 'bitget-spot'
+  | 'none';
+
+export interface CashEquityRef {
+  symbol: string;
+  last: number;
+  change24h?: number;
+  /** yahoo | bitget-mcp-server (US MCP) | mcp (bitget-signal global_assets) */
+  source: 'yahoo' | 'bitget-mcp-server' | 'mcp';
 }
 
 export interface Ticker {
@@ -20,6 +37,12 @@ export interface Ticker {
   low24h: number;
   volume24h: number;
   change24h?: number;
+  /** Where the primary quote came from. */
+  venue?: MarketVenue;
+  /** Bitget Reality pair when primary is an rToken (e.g. rNVDAUSDT). */
+  rTokenSymbol?: string;
+  /** Thin cash-equity reference for rToken vs native stock compare. */
+  cashEquity?: CashEquityRef | null;
 }
 
 export interface MarketSnapshot {
@@ -30,6 +53,11 @@ export interface MarketSnapshot {
   low24h: number;
   volume24h: number;
   assetType: string;
+  venue?: MarketVenue;
+  rTokenSymbol?: string;
+  cashEquity?: CashEquityRef | null;
+  /** Basis vs cash equity: (rToken - cash) / cash * 100 when both exist. */
+  rTokenVsCashPct?: number | null;
 }
 
 export interface NewsItem {
@@ -113,28 +141,36 @@ const BITGET_GRANULARITY: Record<string, string> = {
 };
 
 /**
- * Market data service - real market data. Crypto OHLCV comes directly from
- * the public Bitget REST API (no key needed). Falls back to a deterministic
- * placeholder when the network/provider is unavailable.
+ * Market data service — US-stock / rToken research is Bitget Reality-first
+ * (B2): live r*USDT pairs as primary market truth, with a thin cash-equity
+ * quote (Yahoo / MCP) for rToken-vs-native compare. Crypto OHLCV still comes
+ * from Bitget spot REST. Falls back to a deterministic placeholder when the
+ * network/provider is unavailable.
  */
 @Injectable()
 export class MarketDataService {
   private mcp: McpClientService | null = null;
-  private stockProvider: 'mcp' | 'yahoo' | 'none' = 'none';
+  private usMcp: UsStockMcpClientService | null = null;
+  private stockProvider: MarketVenue = 'none';
 
-  constructor(@Optional() mcp?: McpClientService) {
+  constructor(
+    @Optional() mcp?: McpClientService,
+    @Optional() usMcp?: UsStockMcpClientService,
+  ) {
     this.mcp = mcp ?? null;
+    this.usMcp = usMcp ?? null;
     if (!process.env.MARKET_DATA_PROVIDER) {
       process.env.MARKET_DATA_PROVIDER = 'bitget';
     }
   }
 
-  /** Bind the shared MCP client (used by the standalone harness too). */
-  attach(mcp: McpClientService): void {
+  /** Bind MCP clients (used by the standalone harness too). */
+  attach(mcp: McpClientService, usMcp?: UsStockMcpClientService): void {
     this.mcp = mcp;
+    if (usMcp) this.usMcp = usMcp;
   }
 
-  /** Which provider served the last US-stock request. */
+  /** Which provider served the last US-stock / rToken candle request. */
   stockCandleSource(): string {
     return this.stockProvider;
   }
@@ -149,10 +185,37 @@ export class MarketDataService {
       : `${symbol.toUpperCase()}USDT`;
   }
 
+  /**
+   * Underlying equity ticker (AAPL) from AAPL / rAAPL / rAAPLUSDT / RAAPLUSDT.
+   */
+  equityBase(symbol: string): string {
+    let s = symbol.toUpperCase().trim();
+    s = s.replace(/[-_/]/g, '');
+    if (s.endsWith('USDT') || s.endsWith('USDC')) {
+      s = s.slice(0, -4);
+    }
+    if (s.startsWith('R') && s.length > 1 && !KNOWN_CRYPTO.has(s.slice(1))) {
+      // Reality pairs are listed as rAAPLUSDT → RAAPL after USDT strip.
+      const maybe = s.slice(1);
+      if (/^[A-Z]{1,5}$/.test(maybe)) return maybe;
+    }
+    return s;
+  }
+
+  /** Bitget Reality spot pair for a US equity (e.g. NVDA → rNVDAUSDT). */
+  realitySymbol(symbol: string): string {
+    return `r${this.equityBase(symbol)}USDT`;
+  }
+
   /** Best-effort asset type classification. */
   assetTypeOf(symbol: string): 'crypto' | 'us-stock' {
     const clean = symbol.toUpperCase().replace(/^[0-9.]+(?=.)/, '');
+    // Reality / tokenized US equities trade as r*USDT on Bitget spot.
+    if (/^R[A-Z]{1,10}USDT$/i.test(clean)) return 'us-stock';
     if (KNOWN_CRYPTO.has(clean)) return 'crypto';
+    if (KNOWN_CRYPTO.has(this.equityBase(clean)) && /USDT$/i.test(clean)) {
+      return 'crypto';
+    }
     if (/(?:USDT|USDC|BTC|ETH|USD[CT]?)$/.test(clean)) return 'crypto';
     return 'us-stock';
   }
@@ -162,8 +225,121 @@ export class MarketDataService {
       return this.getStockQuote(symbol);
     }
     try {
-      const tickerUrl = `https://api.bitget.com/api/v2/spot/market/tickers?symbol=${this.bitgetSymbol(
+      const row = await this.fetchBitgetTicker(this.bitgetSymbol(symbol));
+      if (!row) throw new Error('ticker not found');
+      return {
         symbol,
+        ...row,
+        venue: 'bitget-spot',
+      };
+    } catch {
+      return {
+        symbol,
+        last: 0,
+        bid: 0,
+        ask: 0,
+        high24h: 0,
+        low24h: 0,
+        volume24h: 0,
+        change24h: 0,
+        venue: 'none',
+      };
+    }
+  }
+
+  /** Compact market snapshot for a symbol (used by the research result). */
+  async getMarketSnapshot(symbol: string): Promise<MarketSnapshot | null> {
+    try {
+      const t = await this.getTicker(symbol);
+      if (!t.last) return null;
+      const cash = t.cashEquity;
+      let rTokenVsCashPct: number | null = null;
+      if (cash && cash.last > 0 && t.venue === 'bitget-reality') {
+        rTokenVsCashPct = ((t.last - cash.last) / cash.last) * 100;
+      }
+      return {
+        symbol: this.equityBase(symbol),
+        price: t.last,
+        change24h: t.change24h ?? 0,
+        high24h: t.high24h,
+        low24h: t.low24h,
+        volume24h: t.volume24h,
+        assetType: this.assetTypeOf(symbol),
+        venue: t.venue,
+        rTokenSymbol: t.rTokenSymbol,
+        cashEquity: cash ?? null,
+        rTokenVsCashPct,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Live quote for US stocks / rTokens.
+   * Primary: Bitget Reality (r*USDT). Secondary: cash equity (Yahoo / MCP).
+   */
+  private async getStockQuote(symbol: string): Promise<Ticker> {
+    const base = this.equityBase(symbol);
+    const rPair = this.realitySymbol(base);
+
+    const [reality, cash] = await Promise.all([
+      this.fetchBitgetTicker(rPair),
+      this.getCashEquityQuote(base),
+    ]);
+
+    if (reality && reality.last > 0) {
+      this.stockProvider = 'bitget-reality';
+      return {
+        symbol: base,
+        ...reality,
+        venue: 'bitget-reality',
+        rTokenSymbol: rPair,
+        cashEquity: cash,
+      };
+    }
+
+    if (cash && cash.last > 0) {
+      this.stockProvider = cash.source;
+      return {
+        symbol: base,
+        last: cash.last,
+        bid: cash.last,
+        ask: cash.last,
+        high24h: 0,
+        low24h: 0,
+        volume24h: 0,
+        change24h: cash.change24h ?? 0,
+        venue: cash.source,
+        cashEquity: cash,
+      };
+    }
+
+    this.stockProvider = 'none';
+    return {
+      symbol: base,
+      last: 0,
+      bid: 0,
+      ask: 0,
+      high24h: 0,
+      low24h: 0,
+      volume24h: 0,
+      venue: 'none',
+    };
+  }
+
+  private async fetchBitgetTicker(pair: string): Promise<{
+    last: number;
+    bid: number;
+    ask: number;
+    high24h: number;
+    low24h: number;
+    volume24h: number;
+    change24h: number;
+  } | null> {
+    try {
+      const tickerUrl = `https://api.bitget.com/api/v2/spot/market/tickers?symbol=${encodeURIComponent(
+        pair,
       )}`;
       const res = await fetch(tickerUrl, {
         signal: AbortSignal.timeout(15_000),
@@ -178,110 +354,92 @@ export class MarketDataService {
           high24h: string;
           low24h: string;
           baseVolume: string;
+          change24h?: string;
         }>;
       };
       const t = json.data?.[0];
-      if (json.code !== '00000' || !t) throw new Error('ticker not found');
+      if (json.code !== '00000' || !t) return null;
       const last = Number(t.lastPr);
+      if (!Number.isFinite(last) || last <= 0) return null;
       const open = Number(t.open);
+      const changeFromApi = Number(t.change24h);
       return {
-        symbol,
         last,
-        bid: Number(t.bidPr),
-        ask: Number(t.askPr),
-        high24h: Number(t.high24h),
-        low24h: Number(t.low24h),
-        volume24h: Number(t.baseVolume),
-        change24h: open > 0 ? ((last - open) / open) * 100 : 0,
-      };
-    } catch (error) {
-      // Placeholder fallback
-      return {
-        symbol,
-        last: 0,
-        bid: 0,
-        ask: 0,
-        high24h: 0,
-        low24h: 0,
-        volume24h: 0,
-        change24h: 0,
-      };
-    }
-  }
-
-  /** Compact market snapshot for a symbol (used by the research result). */
-  async getMarketSnapshot(symbol: string): Promise<MarketSnapshot | null> {
-    try {
-      const t = await this.getTicker(symbol);
-      if (!t.last) return null;
-      return {
-        symbol,
-        price: t.last,
-        change24h: t.change24h ?? 0,
-        high24h: t.high24h,
-        low24h: t.low24h,
-        volume24h: t.volume24h,
-        assetType: this.assetTypeOf(symbol),
+        bid: Number(t.bidPr) || last,
+        ask: Number(t.askPr) || last,
+        high24h: Number(t.high24h) || last,
+        low24h: Number(t.low24h) || last,
+        volume24h: Number(t.baseVolume) || 0,
+        change24h: Number.isFinite(changeFromApi)
+          ? changeFromApi * 100
+          : open > 0
+            ? ((last - open) / open) * 100
+            : 0,
       };
     } catch {
       return null;
     }
   }
 
-  /** Live quote for US stocks / ETFs. Primary: Bitget MCP `global_assets`; fallback: Yahoo. */
-  private async getStockQuote(symbol: string): Promise<Ticker> {
-    if (this.mcp) {
-      const price = await this.mcpStockPrice(symbol);
-      if (price) {
-        this.stockProvider = 'mcp';
-        return {
-          symbol,
-          last: price,
-          bid: price,
-          ask: price,
-          high24h: 0,
-          low24h: 0,
-          volume24h: 0,
-        };
+  /**
+   * Thin cash-equity reference.
+   * Order: bitget-mcp-server (handbook US MCP) → Yahoo → bitget-signal.
+   */
+  private async getCashEquityQuote(
+    base: string,
+  ): Promise<CashEquityRef | null> {
+    if (this.usMcp && !this.usMcp.isDown()) {
+      try {
+        const hit = await this.usMcp.callIntent('quote', base);
+        const price = hit ? this.findPrice(hit.parsed ?? hit.text) : null;
+        if (price && price > 0) {
+          return {
+            symbol: base,
+            last: price,
+            source: 'bitget-mcp-server',
+          };
+        }
+      } catch {
+        // fall through
       }
     }
-    this.stockProvider = 'yahoo';
+
     try {
       const res = await fetch(
         `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-          symbol,
+          base,
         )}?interval=1d&range=5d`,
-        { signal: AbortSignal.timeout(15_000), headers: { 'User-Agent': 'Mozilla/5.0' } },
+        {
+          signal: AbortSignal.timeout(12_000),
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        },
       );
       const json = (await res.json()) as YahooChartResponse;
-      this.stockProvider = 'yahoo';
       const meta = json?.chart?.result?.[0]?.meta;
-      if (!meta?.symbol) throw new Error('stock not found');
-      return {
-        symbol,
-        last: meta.regularMarketPrice ?? meta.previousClose ?? 0,
-        bid: meta.regularMarketPrice ?? 0,
-        ask: meta.regularMarketPrice ?? 0,
-        high24h: meta.regularMarketDayHigh ?? 0,
-        low24h: meta.regularMarketDayLow ?? 0,
-        volume24h: meta.regularMarketVolume ?? 0,
-        change24h: meta.regularMarketChangePercent ?? 0,
-      };
+      const last = meta?.regularMarketPrice ?? meta?.previousClose ?? 0;
+      if (meta?.symbol && last > 0) {
+        return {
+          symbol: base,
+          last,
+          change24h: meta.regularMarketChangePercent ?? 0,
+          source: 'yahoo',
+        };
+      }
     } catch {
-      return {
-        symbol,
-        last: 0,
-        bid: 0,
-        ask: 0,
-        high24h: 0,
-        low24h: 0,
-        volume24h: 0,
-      };
+      // fall through to signal MCP
     }
+
+    if (this.mcp) {
+      const price = await this.signalStockPrice(base);
+      if (price && price > 0) {
+        return { symbol: base, last: price, source: 'mcp' };
+      }
+    }
+    return null;
   }
 
-  /** Last price via Bitget MCP `global_assets` (US stocks, ETFs, futures). */
-  private async mcpStockPrice(symbol: string): Promise<number | null> {
+  /** Last price via bitget-signal `global_assets`. */
+  private async signalStockPrice(symbol: string): Promise<number | null> {
     try {
       const text = await this.mcp!.callTool(
         'global_assets',
@@ -295,7 +453,9 @@ export class MarketDataService {
     }
   }
 
-  /** OHLCV via Bitget MCP `global_assets` -> normalized Candle[]. */
+  /**
+   * OHLCV: bitget-mcp-server first, then bitget-signal `global_assets`.
+   */
   private async mcpStockCandles(
     symbol: string,
     interval: string,
@@ -303,8 +463,29 @@ export class MarketDataService {
     range: string,
     limit: number,
   ): Promise<Candle[] | null> {
+    if (this.usMcp && !this.usMcp.isDown()) {
+      try {
+        const hit = await this.usMcp.callIntent('ohlcv', symbol, {
+          interval: intervalLabel,
+          period: range,
+          range,
+        });
+        if (hit) {
+          const parsed = hit.parsed ?? this.parseMcpText(hit.text);
+          const rows = this.findCandleRows(parsed);
+          if (rows.length > 0) {
+            this.stockProvider = 'bitget-mcp-server';
+            return rows.slice(-limit);
+          }
+        }
+      } catch {
+        // fall through to signal
+      }
+    }
+
+    if (!this.mcp) return null;
     try {
-      const text = await this.mcp!.callTool(
+      const text = await this.mcp.callTool(
         'global_assets',
         { action: 'ohlcv', symbol, interval: intervalLabel, period: range },
         12,
@@ -312,6 +493,7 @@ export class MarketDataService {
       const parsed = this.parseMcpText(text);
       const rows = this.findCandleRows(parsed);
       if (rows.length > 0) {
+        this.stockProvider = 'mcp';
         return rows.slice(-limit);
       }
       return null;
@@ -407,35 +589,34 @@ export class MarketDataService {
     return out;
   }
 
-  /** OHLCV history for US stocks / ETFs. Primary: Bitget MCP `global_assets`; fallback: Yahoo. */
+  /**
+   * OHLCV for US stocks / rTokens.
+   * Primary: Bitget Reality r*USDT candles. Fallback: Yahoo (cash), then MCP.
+   */
   async getStockCandles(
     symbol: string,
     interval: string,
     limit = 200,
   ): Promise<Candle[]> {
+    const base = this.equityBase(symbol);
+    const rPair = this.realitySymbol(base);
+
+    const reality = await this.fetchBitgetCandles(rPair, interval, limit);
+    if (reality.length > 0) {
+      this.stockProvider = 'bitget-reality';
+      return reality;
+    }
+
     const yahooInterval =
       interval === '1w' ? '1wk' : interval === '1M' ? '1mo' : '1d';
     const mcpInterval =
       interval === '1w' ? '1wk' : interval === '1M' ? '1mo' : '1d';
-    if (this.mcp) {
-      const range = this.yahooRange(interval, limit);
-      const mcpCandles = await this.mcpStockCandles(
-        symbol,
-        interval,
-        mcpInterval,
-        range,
-        limit,
-      );
-      if (mcpCandles && mcpCandles.length > 0) {
-        this.stockProvider = 'mcp';
-        return mcpCandles;
-      }
-    }
+
     try {
       const range = this.yahooRange(interval, limit);
       const res = await fetch(
         `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-          symbol,
+          base,
         )}?interval=${yahooInterval}&range=${range}`,
         {
           signal: AbortSignal.timeout(20_000),
@@ -446,24 +627,77 @@ export class MarketDataService {
       const result = json?.chart?.result?.[0];
       const timestamps = result?.timestamp ?? [];
       const quote = result?.indicators?.quote?.[0];
-      if (!timestamps.length || !quote) throw new Error('no stock candles');
-      const out: Candle[] = [];
-      for (let i = 0; i < timestamps.length; i++) {
-        const close = quote.close?.[i];
-        if (close == null || Number.isNaN(Number(close))) continue;
-        out.push({
-          ts: timestamps[i] * 1000,
-          open: Number(quote.open?.[i] ?? close),
-          high: Number(quote.high?.[i] ?? close),
-          low: Number(quote.low?.[i] ?? close),
-          close: Number(close),
-          volume: Number(quote.volume?.[i] ?? 0),
-        });
+      if (timestamps.length && quote) {
+        const out: Candle[] = [];
+        for (let i = 0; i < timestamps.length; i++) {
+          const close = quote.close?.[i];
+          if (close == null || Number.isNaN(Number(close))) continue;
+          out.push({
+            ts: timestamps[i] * 1000,
+            open: Number(quote.open?.[i] ?? close),
+            high: Number(quote.high?.[i] ?? close),
+            low: Number(quote.low?.[i] ?? close),
+            close: Number(close),
+            volume: Number(quote.volume?.[i] ?? 0),
+          });
+        }
+        if (out.length > 0) {
+          this.stockProvider = 'yahoo';
+          return out.slice(-limit);
+        }
       }
-      this.stockProvider = 'yahoo';
-      return out.slice(-limit);
     } catch {
-      this.stockProvider = 'none';
+      // fall through to MCP
+    }
+
+    if (this.mcp) {
+      const range = this.yahooRange(interval, limit);
+      const mcpCandles = await this.mcpStockCandles(
+        base,
+        interval,
+        mcpInterval,
+        range,
+        limit,
+      );
+      if (mcpCandles && mcpCandles.length > 0) {
+        this.stockProvider = 'mcp';
+        return mcpCandles;
+      }
+    }
+
+    this.stockProvider = 'none';
+    return [];
+  }
+
+  private async fetchBitgetCandles(
+    pair: string,
+    interval: string,
+    limit: number,
+  ): Promise<Candle[]> {
+    const granularity = BITGET_GRANULARITY[interval] ?? interval;
+    try {
+      const url = `${BITGET_CANDLES_URL}?symbol=${encodeURIComponent(
+        pair,
+      )}&granularity=${granularity}&limit=${limit}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      const json = (await res.json()) as { code: string; data?: string[][] };
+      if (json.code !== '00000' || !json.data?.length) return [];
+      const mapped = json.data
+        .map((row) => ({
+          ts: Number(row[0]),
+          open: Number(row[1]),
+          high: Number(row[2]),
+          low: Number(row[3]),
+          close: Number(row[4]),
+          volume: Number(row[5]),
+        }))
+        .filter((c) => Number.isFinite(c.close) && c.close > 0);
+      // Normalize to ascending time (API order varies by granularity).
+      if (mapped.length >= 2 && mapped[0].ts > mapped[mapped.length - 1].ts) {
+        mapped.reverse();
+      }
+      return mapped;
+    } catch {
       return [];
     }
   }
@@ -477,25 +711,15 @@ export class MarketDataService {
       const stock = await this.getStockCandles(symbol, interval, limit);
       if (stock.length > 0) return stock;
     }
-    const granularity = BITGET_GRANULARITY[interval] ?? interval;
     try {
-      const url = `${BITGET_CANDLES_URL}?symbol=${this.bitgetSymbol(
-        symbol,
-      )}&granularity=${granularity}&limit=${limit}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-      const json = (await res.json()) as { code: string; data?: string[][] };
-      if (json.code !== '00000' || !json.data) {
-        throw new Error(`Bitget candles failed: ${json.code}`);
-      }
-      return json.data.map((row) => ({
-        ts: Number(row[0]),
-        open: Number(row[1]),
-        high: Number(row[2]),
-        low: Number(row[3]),
-        close: Number(row[4]),
-        volume: Number(row[5]),
-      }));
-    } catch (error) {
+      const candles = await this.fetchBitgetCandles(
+        this.bitgetSymbol(symbol),
+        interval,
+        limit,
+      );
+      if (candles.length > 0) return candles;
+      throw new Error('Bitget candles empty');
+    } catch {
       // Placeholder fallback
       const candles: Candle[] = [];
       const now = Date.now();

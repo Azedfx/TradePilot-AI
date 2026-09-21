@@ -106,8 +106,12 @@ export class ResearchService {
 
     let marketData: unknown;
     if (session.symbol && session.status !== ResearchStatus.FAILED) {
+      const fallback =
+        session.assetType === 'crypto' ? 'BTC' : 'SPY';
       marketData = await this.marketData
-        .getMarketSnapshot(session.symbol === 'UNKNOWN' ? 'BTC' : session.symbol)
+        .getMarketSnapshot(
+          session.symbol === 'UNKNOWN' ? fallback : session.symbol,
+        )
         .catch(() => null);
     }
 
@@ -194,7 +198,29 @@ export class ResearchService {
           }
         : null,
       historicalStats,
-      historicalMatches: session.historicalMatches ?? [],
+      historicalMatches: (session.historicalMatches ?? []).map((m) => {
+        const ev = (m as { historicalEvent?: {
+          symbol?: string;
+          eventType?: string;
+          eventDate?: Date;
+          return1dPct?: number | null;
+          return5dPct?: number | null;
+          return20dPct?: number | null;
+          volatility20d?: number | null;
+        } }).historicalEvent;
+        return {
+          id: m.id,
+          similarityScore: m.similarityScore,
+          similarityExplanation: m.similarityExplanation,
+          eventType: ev?.eventType ?? null,
+          eventDate: ev?.eventDate?.toISOString?.() ?? null,
+          symbol: ev?.symbol ?? session.symbol,
+          return1dPct: ev?.return1dPct ?? null,
+          return5dPct: ev?.return5dPct ?? null,
+          return20dPct: ev?.return20dPct ?? null,
+          volatility20d: ev?.volatility20d ?? null,
+        };
+      }),
       findings,
       stressTests: (session.thesis?.stressTests ?? []).map((st) => {
         const assumptions = (st.assumptions ?? {}) as {

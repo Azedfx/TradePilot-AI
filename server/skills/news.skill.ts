@@ -33,6 +33,21 @@ export class NewsSkill extends BaseSkill {
   }
 
   async run(context: ResearchContext): Promise<SkillResult> {
+    // Stocks: Google News equity query first (MCP crypto feeds are a weak
+    // match for NVDA/AAPL). Crypto: MCP crypto feeds first.
+    if (context.assetType === 'us-stock') {
+      const fromRss = await this.fetchFromRss(context);
+      if (fromRss.length > 0) {
+        return this.buildResult(
+          'news',
+          `Gathered ${fromRss.length} equity headline(s) for ${context.symbols.join(
+            ', ',
+          )}.`,
+          { headlines: fromRss, source: 'google-news-rss' },
+        );
+      }
+    }
+
     try {
       const headlines = await this.fetchFromMcp(context);
       if (headlines.length > 0) {
@@ -62,7 +77,11 @@ export class NewsSkill extends BaseSkill {
     context: ResearchContext,
   ): Promise<Headline[]> {
     const limit = 5;
-    const feedKeys = 'cointelegraph,coindesk,decrypt,blockworks,coindesk_the_defiant,watcherguru';
+    // Equity desk: prefer TradFi / macro / tech feeds. Crypto desk: crypto feeds.
+    const feedKeys =
+      context.assetType === 'us-stock'
+        ? 'cnbc,fed,bbc_world,guardian,npr,aljazeera,techcrunch,theverge,wired,reddit_economics,hackernews'
+        : 'cointelegraph,coindesk,decrypt,blockworks,watcherguru,cryptonews_com,messari';
 
     const keyword = context.symbols.join(' ');
     const text = await this.mcp.callTool(
@@ -103,11 +122,12 @@ export class NewsSkill extends BaseSkill {
   private async fetchFromRss(
     context: ResearchContext,
   ): Promise<Headline[]> {
-    // Append a disambiguating qualifier based on asset type (e.g. so "SOL"
-    // or "COIN" doesn't pull unrelated results) — previously this always
-    // appended "crypto", which biased/broke stock searches (and multi-symbol
-    // joins, since ' crypto' was used as the separator instead of a space).
-    const qualifier = context.assetType === 'us-stock' ? 'stock' : 'crypto';
+    // For US stocks, prefer equity-oriented Google News queries (earnings,
+    // stock) before a bare ticker — avoids crypto-feed pollution on NVDA/AAPL.
+    const qualifier =
+      context.assetType === 'us-stock'
+        ? 'stock OR earnings OR equity'
+        : 'crypto';
     const query = `${context.symbols.join(' ')} ${qualifier}`.trim();
     const articles = await this.marketData.fetchGoogleNews(query, 5);
     return articles.map((a) => ({
