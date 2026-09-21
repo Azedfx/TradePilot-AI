@@ -5,15 +5,19 @@ import { McpClientService } from '../market-data/mcp-client.service';
 import { parseMcpJson, unwrapMcpPayload } from './mcp.util';
 import { usEquityMarketStatus, UsMarketStatus } from '../research/market-hours';
 
+interface MacroSnapshot {
+  tenYearYield: number | null;
+  threeMonthYield: number | null;
+  vix: number | null;
+  dxy: number | null;
+  spxChangePct: number | null;
+}
+
 /**
- * Macro skill - the global economic backdrop for risk assets.
- * Primary: Bitget datahub MCP `macro_indicators` (FRED) and `rates_yields`
- * (yield curve / Fed funds / spreads) — these apply to any asset, including
- * US stocks. `cross_asset` (BTC vs DXY, Nasdaq, Gold, 10Y, VIX correlations)
- * is a crypto-centric tool (correlations are always computed against BTC as
- * the base asset) so it's skipped for stock research rather than showing an
- * off-topic crypto correlation table on a stock report; crypto research
- * (when explicitly detected) still uses it.
+ * Macro skill — global backdrop for risk assets.
+ * Primary: bitget-signal `macro_indicators` / `rates_yields`.
+ * Fallback: Yahoo quotes for 10Y (^TNX), 3M (^IRX), VIX, DXY, S&P —
+ * so stock/rToken demos never show "unknown / unavailable".
  */
 @Injectable()
 export class MacroSkill extends BaseSkill {
@@ -27,47 +31,102 @@ export class MacroSkill extends BaseSkill {
 
   async run(context: ResearchContext): Promise<SkillResult> {
     const isStock = context.assetType === 'us-stock';
-    const indicators = await this.indicators();
-    const rates = await this.rates();
+    let indicators = await this.indicators();
+    let rates = await this.rates();
     const crossAsset = isStock ? [] : await this.crossAsset(context);
     const usMarketWindow = this.marketWindow(context);
 
+    let snapshot: MacroSnapshot | null = null;
+    if (!this.hasLiveMacro(indicators, rates)) {
+      snapshot = await this.yahooMacroSnapshot();
+      if (snapshot) {
+        this.lastSource = 'yahoo-macro';
+        rates = {
+          ...(rates ?? {}),
+          tenYearYield: snapshot.tenYearYield,
+          threeMonthYield: snapshot.threeMonthYield,
+          vix: snapshot.vix,
+          dxy: snapshot.dxy,
+          spxChangePct: snapshot.spxChangePct,
+          yieldCurve:
+            snapshot.tenYearYield != null && snapshot.threeMonthYield != null
+              ? snapshot.tenYearYield - snapshot.threeMonthYield
+              : null,
+        };
+        indicators = {
+          ...(indicators ?? {}),
+          vix: snapshot.vix,
+          dxy: snapshot.dxy,
+        };
+      }
+    }
+
+    const environment = this.assessEnvironment(indicators, rates, snapshot);
     const backdrop = {
-      environment: this.assessEnvironment(indicators, rates),
+      environment,
       indicators,
       rates,
+      snapshot,
       crossAsset,
       usMarketWindow,
       source: this.lastSource,
     };
 
-    const summary =
-      this.lastSource === 'mcp'
-        ? 'Live macro dashboard assembled from FRED, Treasury yields and cross-asset correlations.'
-        : 'Macro backdrop could not be refreshed from live sources; returning structured estimates.';
+    const bits: string[] = [`Environment: ${environment}`];
+    if (snapshot?.vix != null) bits.push(`VIX ${snapshot.vix.toFixed(1)}`);
+    if (snapshot?.tenYearYield != null)
+      bits.push(`10Y ${snapshot.tenYearYield.toFixed(2)}%`);
+    if (snapshot?.dxy != null) bits.push(`DXY ${snapshot.dxy.toFixed(2)}`);
+    if (usMarketWindow?.note) bits.push(usMarketWindow.note);
 
-    return this.buildResult(
-      'macro',
-      usMarketWindow?.note ? `${summary} ${usMarketWindow.note}` : summary,
-      backdrop,
-    );
+    const summary =
+      this.lastSource === 'placeholder'
+        ? 'Macro backdrop could not be refreshed from live sources.'
+        : bits.join(' · ');
+
+    return this.buildResult('macro', summary, backdrop);
   }
 
-  /**
-   * When researching a US stock / tokenized rToken, flags whether the
-   * underlying NYSE/Nasdaq cash market is currently open. This is the core
-   * S2 scenario: rTokens keep pricing 7×24 while the exchange is closed
-   * nights and weekends, so a macro catalyst can transmit with no arb or
-   * halt window until the next regular session.
-   */
+  private hasLiveMacro(
+    indicators: Record<string, unknown> | null,
+    rates: Record<string, unknown> | null,
+  ): boolean {
+    return this.hasNumericPayload(indicators) || this.hasNumericPayload(rates);
+  }
+
+  private hasNumericPayload(node: Record<string, unknown> | null): boolean {
+    if (!node) return false;
+    for (const v of Object.values(node)) {
+      if (typeof v === 'number' && Number.isFinite(v)) return true;
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const obj = v as Record<string, unknown>;
+        if (obj.error === '' || obj.error == null) {
+          for (const nested of Object.values(obj)) {
+            if (typeof nested === 'number' && Number.isFinite(nested)) return true;
+            if (typeof nested === 'string' && Number.isFinite(Number(nested)))
+              return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   private marketWindow(
     context: ResearchContext,
   ): (UsMarketStatus & { note: string | null }) | null {
     if (context.assetType !== 'us-stock') return null;
     const status = usEquityMarketStatus();
-    if (status.isRegularSessionOpen) return { ...status, note: null };
-
     const symbol = context.symbols[0] ?? 'This asset';
+    const focusRtoken = context.preferences?.focus === 'rToken';
+
+    if (status.isRegularSessionOpen) {
+      const note = focusRtoken
+        ? `${symbol}: cash session is open now, but an rToken thesis still needs a weekend/overnight transmission plan — Reality keeps pricing 7×24 after the cash close.`
+        : null;
+      return { ...status, note };
+    }
+
     const closedReason =
       status.session === 'closed-weekend'
         ? 'closed for the weekend'
@@ -86,6 +145,62 @@ export class MacroSkill extends BaseSkill {
     return { ...status, note };
   }
 
+  private async yahooMacroSnapshot(): Promise<MacroSnapshot | null> {
+    const [tnx, irx, vix, dxy, spx] = await Promise.all([
+      this.yahooMeta('^TNX'),
+      this.yahooMeta('^IRX'),
+      this.yahooMeta('^VIX'),
+      this.yahooMeta('DX-Y.NYB'),
+      this.yahooMeta('^GSPC'),
+    ]);
+    if (!tnx && !vix && !dxy) return null;
+    return {
+      tenYearYield: tnx?.price ?? null,
+      threeMonthYield: irx?.price ?? null,
+      vix: vix?.price ?? null,
+      dxy: dxy?.price ?? null,
+      spxChangePct: spx?.changePct ?? null,
+    };
+  }
+
+  private async yahooMeta(
+    symbol: string,
+  ): Promise<{ price: number; changePct: number | null } | null> {
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+          symbol,
+        )}?interval=1d&range=5d`,
+        {
+          signal: AbortSignal.timeout(10_000),
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        },
+      );
+      const json = (await res.json()) as {
+        chart?: {
+          result?: Array<{
+            meta?: {
+              regularMarketPrice?: number;
+              previousClose?: number;
+              chartPreviousClose?: number;
+            };
+          }>;
+        };
+      };
+      const meta = json?.chart?.result?.[0]?.meta;
+      const price = Number(meta?.regularMarketPrice);
+      if (!Number.isFinite(price) || price <= 0) return null;
+      const prev = Number(meta?.previousClose ?? meta?.chartPreviousClose);
+      const changePct =
+        Number.isFinite(prev) && prev > 0
+          ? ((price - prev) / prev) * 100
+          : null;
+      return { price, changePct };
+    } catch {
+      return null;
+    }
+  }
+
   private async indicators(): Promise<Record<string, unknown> | null> {
     try {
       const text = await this.mcp.callTool(
@@ -93,8 +208,11 @@ export class MacroSkill extends BaseSkill {
         { action: 'multi_indicator' },
         8,
       );
-      const parsed = unwrapMcpPayload<Record<string, unknown>>(text, 'alt_me_error');
-      if (parsed && Object.keys(parsed).length > 0) {
+      const parsed = unwrapMcpPayload<Record<string, unknown>>(
+        text,
+        'alt_me_error',
+      );
+      if (parsed && this.hasNumericPayload(parsed)) {
         this.lastSource = 'mcp';
         return parsed;
       }
@@ -112,7 +230,7 @@ export class MacroSkill extends BaseSkill {
         8,
       );
       const parsed = unwrapMcpPayload<Record<string, unknown>>(text);
-      if (parsed && Object.keys(parsed).length > 0) {
+      if (parsed && this.hasNumericPayload(parsed)) {
         this.lastSource = 'mcp';
         return parsed;
       }
@@ -137,7 +255,7 @@ export class MacroSkill extends BaseSkill {
         8,
       );
       const parsed = parseMcpJson(text);
-      if (parsed && !parsed['error']) {
+      if (parsed && !(parsed as { error?: unknown }).error) {
         this.lastSource = 'mcp';
         const data = parsed as Record<string, unknown>;
         return Object.entries(data).map(([asset, value]) => ({
@@ -154,9 +272,43 @@ export class MacroSkill extends BaseSkill {
   private assessEnvironment(
     indicators: Record<string, unknown> | null,
     rates: Record<string, unknown> | null,
+    snapshot: MacroSnapshot | null,
   ): string {
-    // Conservative: only claim a direction when we have live data hints.
-    if (!indicators && !rates) return 'unknown (live macro feed unavailable)';
+    const vix =
+      snapshot?.vix ??
+      this.pickNumber(rates, ['vix', 'VIX']) ??
+      this.pickNumber(indicators, ['vix', 'VIX']);
+    const tenY =
+      snapshot?.tenYearYield ??
+      this.pickNumber(rates, ['tenYearYield', 't10y', 'T10Y']);
+    const dxy =
+      snapshot?.dxy ?? this.pickNumber(rates, ['dxy', 'DXY']);
+    const spx = snapshot?.spxChangePct;
+
+    if (vix == null && tenY == null && dxy == null) {
+      return 'unknown (live macro feed unavailable)';
+    }
+
+    // Simple risk regime from VIX + equity tape + dollar.
+    if (vix != null && vix >= 25) return 'risk-off (elevated VIX)';
+    if (vix != null && vix <= 15 && (spx == null || spx >= 0) && (dxy == null || dxy < 105))
+      return 'risk-on (low vol)';
+    if (spx != null && spx <= -1.5) return 'risk-off (equity weakness)';
+    if (dxy != null && dxy >= 105) return 'mixed (strong dollar headwind)';
+    if (tenY != null && tenY >= 4.5) return 'mixed (higher-for-longer rates)';
     return 'neutral';
+  }
+
+  private pickNumber(
+    node: Record<string, unknown> | null,
+    keys: string[],
+  ): number | null {
+    if (!node) return null;
+    for (const k of keys) {
+      const v = node[k];
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
   }
 }
