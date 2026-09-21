@@ -105,37 +105,39 @@ export function AIConclusion({
           Track 3 · AI assists — you make the final call.
         </p>
 
-        {decision ? (
-          <div
-            className={`mt-3 flex items-center gap-2 rounded-md px-3 py-2 text-[9px] font-semibold ${
-              decision === 'accepted'
-                ? 'border border-[#087263] bg-[#08242a] text-[#36dcb9]'
-                : 'border border-[#66343b] bg-[#22171e] text-[#f25c63]'
-            }`}
-          >
-            {decision === 'accepted' ? <Check size={12} /> : <X size={12} />}
-            Thesis {decision === 'accepted' ? 'accepted' : 'rejected'} by you
-          </div>
-        ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button
-              disabled={!done || busy}
-              onClick={() => void onDecide('accepted')}
-              className="flex items-center justify-center gap-1 rounded-md bg-[#6177ff] py-2.5 text-[9px] font-semibold text-white shadow-[0_5px_20px_rgba(79,95,220,.25)] hover:bg-[#7185ff] disabled:cursor-not-allowed disabled:opacity-40"
+        <div id="section-decision" className="scroll-mt-16">
+          {decision ? (
+            <div
+              className={`mt-3 flex items-center gap-2 rounded-md px-3 py-2 text-[9px] font-semibold ${
+                decision === 'accepted'
+                  ? 'border border-[#087263] bg-[#08242a] text-[#36dcb9]'
+                  : 'border border-[#66343b] bg-[#22171e] text-[#f25c63]'
+              }`}
             >
-              <FileText size={10} />
-              Accept Thesis
-            </button>
+              {decision === 'accepted' ? <Check size={12} /> : <X size={12} />}
+              Thesis {decision === 'accepted' ? 'accepted' : 'rejected'} by you
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                disabled={!done || busy}
+                onClick={() => void onDecide('accepted')}
+                className="flex items-center justify-center gap-1 rounded-md bg-[#6177ff] py-2.5 text-[9px] font-semibold text-white shadow-[0_5px_20px_rgba(79,95,220,.25)] hover:bg-[#7185ff] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <FileText size={10} />
+                Accept Thesis
+              </button>
 
-            <button
-              disabled={!done || busy}
-              onClick={() => void onDecide('rejected')}
-              className="rounded-md border border-[#35506d] py-2.5 text-[9px] font-medium text-[#a5b6ca] hover:bg-[#0b1c30] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Reject Thesis
-            </button>
-          </div>
-        )}
+              <button
+                disabled={!done || busy}
+                onClick={() => void onDecide('rejected')}
+                className="rounded-md border border-[#35506d] py-2.5 text-[9px] font-medium text-[#a5b6ca] hover:bg-[#0b1c30] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Reject Thesis
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Evidence */}

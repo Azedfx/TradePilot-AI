@@ -47,6 +47,11 @@ export function HomeView() {
         <div className="p-2">
           <SelfReview />
         </div>
+
+        {/* Accept/Reject lives in the right rail on xl+; duplicate here so laptop/mobile judges see it */}
+        <div className="p-2 xl:hidden">
+          <AIConclusion embedded />
+        </div>
       </div>
 
       {/* RIGHT DESKTOP COLUMN */}

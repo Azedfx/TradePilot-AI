@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   Brain,
+  Check,
   Gauge,
   History,
   LineChart,
@@ -25,6 +26,7 @@ export type DeskSectionId =
   | 'historical'
   | 'stress'
   | 'review'
+  | 'decision'
   | 'sources';
 
 const NAV: {
@@ -93,6 +95,12 @@ const NAV: {
     label: 'Self-Evolution Review',
     icon: <Sparkles size={13} />,
     target: 'section-review',
+  },
+  {
+    id: 'decision',
+    label: 'Accept / Reject',
+    icon: <Check size={13} />,
+    target: 'section-decision',
   },
   {
     id: 'sources',

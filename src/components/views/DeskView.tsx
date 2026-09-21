@@ -36,6 +36,10 @@ export function DeskView() {
         <div className="p-2">
           <SelfReview />
         </div>
+
+        <div className="p-2 xl:hidden">
+          <AIConclusion embedded />
+        </div>
       </div>
 
       <AIConclusion />
