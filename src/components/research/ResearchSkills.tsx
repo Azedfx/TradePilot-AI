@@ -472,6 +472,28 @@ function extractSkillDetail(
     if (data.environment != null) {
       rows.push({ label: 'Environment', value: String(data.environment) });
     }
+    const snap = data.snapshot as {
+      vix?: number | null;
+      tenYearYield?: number | null;
+      threeMonthYield?: number | null;
+      dxy?: number | null;
+      spxChangePct?: number | null;
+    } | null;
+    if (snap?.vix != null) rows.push({ label: 'VIX', value: String(snap.vix) });
+    if (snap?.tenYearYield != null)
+      rows.push({ label: '10Y yield', value: `${Number(snap.tenYearYield).toFixed(2)}%` });
+    if (snap?.threeMonthYield != null)
+      rows.push({
+        label: '3M yield',
+        value: `${Number(snap.threeMonthYield).toFixed(2)}%`,
+      });
+    if (snap?.dxy != null)
+      rows.push({ label: 'DXY', value: String(Number(snap.dxy).toFixed(2)) });
+    if (snap?.spxChangePct != null)
+      rows.push({
+        label: 'S&P 24h',
+        value: `${Number(snap.spxChangePct) >= 0 ? '+' : ''}${Number(snap.spxChangePct).toFixed(2)}%`,
+      });
     const window = data.usMarketWindow as {
       note?: string;
       session?: string;
@@ -491,7 +513,7 @@ function extractSkillDetail(
       rows.push({ label: 'rToken note', value: window.note });
     }
     const rates = data.rates as Record<string, unknown> | null;
-    if (rates && typeof rates === 'object') {
+    if (rates && typeof rates === 'object' && !snap) {
       for (const [k, v] of Object.entries(rates).slice(0, 4)) {
         if (v != null && typeof v !== 'object') {
           rows.push({ label: k, value: String(v) });
@@ -504,6 +526,38 @@ function extractSkillDetail(
 
   if (skillKey === 'sentiment' && data) {
     const rows: { label: string; value: string }[] = [];
+    if (data.tone != null) {
+      rows.push({
+        label: 'Headline tone',
+        value: `${String(data.tone)}${
+          data.toneScore != null
+            ? ` (score ${Number(data.toneScore) >= 0 ? '+' : ''}${data.toneScore})`
+            : ''
+        }`,
+      });
+    }
+    if (data.positioning != null) {
+      rows.push({ label: 'Positioning', value: String(data.positioning) });
+    }
+    if (data.momentum != null) {
+      rows.push({ label: 'Tape momentum', value: String(data.momentum) });
+    }
+    if (data.change24h != null) {
+      const c = Number(data.change24h);
+      rows.push({
+        label: '24h change',
+        value: `${c >= 0 ? '+' : ''}${c.toFixed(2)}%`,
+      });
+    }
+    const samples = Array.isArray(data.sampleHeadlines)
+      ? (data.sampleHeadlines as string[])
+      : [];
+    if (samples.length) {
+      rows.push({
+        label: 'Sample headlines',
+        value: samples.slice(0, 3).join(' · '),
+      });
+    }
     if (data.source === 'not-applicable-for-stocks') {
       rows.push({
         label: 'Equity path',
@@ -511,11 +565,6 @@ function extractSkillDetail(
       });
       if (typeof data.guidance === 'string') {
         rows.push({ label: 'Why', value: data.guidance });
-      } else {
-        rows.push({
-          label: 'Note',
-          value: 'Fear & Greed / futures L-S are crypto-market metrics',
-        });
       }
       return { kind: 'rows', items: rows };
     }
@@ -537,6 +586,9 @@ function extractSkillDetail(
       if (parts.length) {
         rows.push({ label: String(d.symbol ?? 'Deriv'), value: parts.join(' · ') });
       }
+    }
+    if (typeof data.guidance === 'string') {
+      rows.push({ label: 'Note', value: data.guidance });
     }
     if (data.source) rows.push({ label: 'Source', value: String(data.source) });
     if (rows.length) return { kind: 'rows', items: rows };
