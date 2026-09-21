@@ -130,7 +130,7 @@ export function SelfReview() {
                   </h3>
                 </div>
                 <ul className="space-y-2">
-                  {review.recurring.map((r) => (
+                  {review.recurring.slice(0, 2).map((r) => (
                     <li
                       key={r.id}
                       className="rounded-lg border border-[#5c2b34] bg-[#2a141b] px-3 py-2.5"

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
@@ -46,15 +47,77 @@ const ResearchContext = createContext<ResearchContextValue | null>(null);
 
 const POLL_INTERVAL_MS = 1100;
 const MAX_POLLS = 300;
+const LAST_SESSION_KEY = 'tradepilot:lastSessionId';
+const LAST_VIEW_KEY = 'tradepilot:lastView';
+
+function readSessionFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  const fromUrl = new URLSearchParams(window.location.search).get('session');
+  if (fromUrl) return fromUrl;
+  try {
+    return sessionStorage.getItem(LAST_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionId(id: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (id) sessionStorage.setItem(LAST_SESSION_KEY, id);
+    else sessionStorage.removeItem(LAST_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set('session', id);
+  else url.searchParams.delete('session');
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function persistView(view: ViewId): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(LAST_VIEW_KEY, view);
+  } catch {
+    // ignore
+  }
+}
+
+function readView(): ViewId {
+  if (typeof window === 'undefined') return 'home';
+  try {
+    const v = sessionStorage.getItem(LAST_VIEW_KEY);
+    if (
+      v === 'home' ||
+      v === 'desk' ||
+      v === 'my-research' ||
+      v === 'watchlist' ||
+      v === 'templates'
+    ) {
+      return v;
+    }
+  } catch {
+    // ignore
+  }
+  return 'home';
+}
 
 export function ResearchProvider({ children }: { children: ReactNode }) {
-  const [view, setView] = useState<ViewId>('home');
+  const [view, setViewState] = useState<ViewId>('home');
   const [question, setQuestion] = useState('');
   const [session, setSession] = useState<ResearchSessionResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<ResearchSummary[]>([]);
+  const restoredRef = useRef(false);
+  const activePollId = useRef<string | null>(null);
+
+  const navigate = useCallback((next: ViewId) => {
+    setViewState(next);
+    persistView(next);
+  }, []);
 
   const refreshRecent = useCallback(async () => {
     try {
@@ -65,35 +128,49 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    void refreshRecent();
-  }, [refreshRecent]);
-
-  const openSession = useCallback(
-    async (id: string) => {
-      setError(null);
-      try {
-        const s = await getResearch(id);
-        setSession(s);
-        setSessionId(id);
-        setQuestion(s.question);
-      } catch (e) {
-        setSession(null);
-        setSessionId(null);
-        setError(
-          e instanceof Error ? e.message : 'Failed to load session',
-        );
-        throw e;
-      }
-    },
-    [],
-  );
+  const openSession = useCallback(async (id: string) => {
+    setError(null);
+    try {
+      const s = await getResearch(id);
+      setSession(s);
+      setSessionId(id);
+      setQuestion(s.question);
+      persistSessionId(id);
+      // Show the research workspace after reload / reopen.
+      setViewState('home');
+      persistView('home');
+    } catch (e) {
+      setSession(null);
+      setSessionId(null);
+      persistSessionId(null);
+      setError(e instanceof Error ? e.message : 'Failed to load session');
+      throw e;
+    }
+  }, []);
 
   const clearSession = useCallback(() => {
+    activePollId.current = null;
     setSession(null);
     setSessionId(null);
     setError(null);
+    persistSessionId(null);
   }, []);
+
+  // Restore last session + view after a browser refresh.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    setViewState(readView());
+    const id = readSessionFromLocation();
+    if (!id) return;
+    void openSession(id).catch(() => {
+      persistSessionId(null);
+    });
+  }, [openSession]);
+
+  useEffect(() => {
+    void refreshRecent();
+  }, [refreshRecent]);
 
   const runResearch = useCallback(
     async (q?: string) => {
@@ -102,7 +179,7 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
       if (running) return;
 
       setQuestion(text);
-      setView('home');
+      navigate('home');
       setRunning(true);
       setError(null);
       setSession(null);
@@ -110,18 +187,20 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
 
       try {
         const { sessionId: id } = await startResearch(text);
+        activePollId.current = id;
         setSessionId(id);
+        persistSessionId(id);
 
         for (let i = 0; i < MAX_POLLS; i += 1) {
           await sleep(POLL_INTERVAL_MS);
-          // The session may have been superseded.
+          if (activePollId.current !== id) break;
           const s = await getResearch(id);
+          if (activePollId.current !== id) break;
           setSession(s);
           if (s.status === 'COMPLETED' || s.status === 'FAILED') {
-            break;
-          }
-          if (s.status === 'FAILED') {
-            setError('Research pipeline failed. Please try again.');
+            if (s.status === 'FAILED') {
+              setError('Research pipeline failed. Please try again.');
+            }
             break;
           }
         }
@@ -136,14 +215,14 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
         void refreshRecent();
       }
     },
-    [question, running, refreshRecent],
+    [question, running, refreshRecent, navigate],
   );
 
   return (
     <ResearchContext.Provider
       value={{
         view,
-        navigate: setView,
+        navigate,
         question,
         setQuestion,
         session,

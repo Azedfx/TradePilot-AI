@@ -549,6 +549,12 @@ function extractSkillDetail(
         value: `${c >= 0 ? '+' : ''}${c.toFixed(2)}%`,
       });
     }
+    if (data.headlineCount != null) {
+      rows.push({
+        label: 'Headlines scored',
+        value: String(data.headlineCount),
+      });
+    }
     const samples = Array.isArray(data.sampleHeadlines)
       ? (data.sampleHeadlines as string[])
       : [];

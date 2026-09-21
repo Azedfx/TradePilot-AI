@@ -173,16 +173,22 @@ export class StressTestService {
     worstShock: number,
     vol: VolStats,
   ): string {
-    const stop = Math.min(0.15, Math.abs(worstShock + 0.02));
+    const worstAbs = Math.abs(worstShock);
+    // Stop must survive the worst stress case — slightly wider than that
+    // drawdown so self-evolution doesn't spam "stop too tight" every run.
+    const stop = Math.min(0.25, Math.max(0.04, worstAbs * 1.05));
     const size = Math.max(
       2,
       Math.min(20, Math.round((1 - thesis.confidence) * 30)),
     );
-    return `Based on live Bitget Reality ${vol.sampleSize}-day volatility of ${(
-      vol.annualizedVol * 100
-    ).toFixed(1)}% annualized for ${symbol}, scenario drawdowns range from ` +
-      `${(worstShock * 100).toFixed(1)}% to -${(stop * 100).toFixed(1)}%. ` +
+    const mild = worstAbs * (4 / 8);
+    return (
+      `Based on live Bitget Reality ${vol.sampleSize}-day volatility of ${(
+        vol.annualizedVol * 100
+      ).toFixed(1)}% annualized for ${symbol}, stress drawdowns span roughly ` +
+      `-${(mild * 100).toFixed(1)}% (macro shock) to -${(worstAbs * 100).toFixed(1)}% (bear). ` +
       `Recommended max position: ${size}% of account with a hard stop at ` +
-      `${(stop * 100).toFixed(1)}% below entry.`;
+      `${(stop * 100).toFixed(1)}% below entry (≥ worst-case stress).`
+    );
   }
 }

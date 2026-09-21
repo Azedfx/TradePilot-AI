@@ -10,6 +10,7 @@ const BULLISH = [
   'surge',
   'soar',
   'rally',
+  'rallying',
   'upgrade',
   'record',
   'bullish',
@@ -19,8 +20,24 @@ const BULLISH = [
   'growth',
   'breakthrough',
   'raises',
+  'raised',
   'strong',
   'optimistic',
+  'gains',
+  'jumps',
+  'climbs',
+  'rises',
+  'rose',
+  'higher',
+  'boom',
+  'wins',
+  'positive',
+  'upside',
+  'accelerate',
+  'delivery',
+  'deliveries',
+  'profit',
+  'profits',
 ];
 const BEARISH = [
   'miss',
@@ -32,13 +49,31 @@ const BEARISH = [
   'avoid',
   'sell',
   'cut',
+  'cuts',
   'weak',
   'warning',
   'probe',
   'recall',
   'layoff',
+  'layoffs',
   'overvalued',
   'risk',
+  'risks',
+  'falls',
+  'fell',
+  'drop',
+  'drops',
+  'slides',
+  'slump',
+  'loss',
+  'losses',
+  'concern',
+  'fears',
+  'investigation',
+  'delay',
+  'delays',
+  'downside',
+  'pressure',
 ];
 
 /**
@@ -87,8 +122,9 @@ export class SentimentSkill extends BaseSkill {
     context: ResearchContext,
   ): Promise<SkillResult> {
     const symbol = context.symbols[0] ?? 'STOCK';
+    const base = this.marketData.equityBase(symbol);
     const [headlines, ticker] = await Promise.all([
-      this.fetchHeadlines(symbol),
+      this.fetchHeadlines(base),
       this.marketData.getTicker(symbol).catch(() => null),
     ]);
 
@@ -107,22 +143,44 @@ export class SentimentSkill extends BaseSkill {
                 ? 'mild-down'
                 : 'flat';
 
+    // Blend tape when headlines are flat / missing so the panel is never blank.
+    let label = tone.label;
+    let score = tone.score;
+    if (headlines.length === 0 && change24h != null) {
+      if (change24h >= 1.5) {
+        label = 'bullish';
+        score = 1;
+      } else if (change24h <= -1.5) {
+        label = 'bearish';
+        score = -1;
+      }
+    } else if (label === 'neutral' && change24h != null) {
+      if (change24h >= 2) {
+        label = 'bullish';
+        score = Math.max(score, 1);
+      } else if (change24h <= -2) {
+        label = 'bearish';
+        score = Math.min(score, -1);
+      }
+    }
+
     let positioning: 'risk-on' | 'risk-off' | 'mixed' | 'neutral' = 'neutral';
-    if (tone.label === 'bullish' && (change24h ?? 0) >= 0) positioning = 'risk-on';
-    else if (tone.label === 'bearish' && (change24h ?? 0) <= 0)
+    if (label === 'bullish' && (change24h ?? 0) >= 0) positioning = 'risk-on';
+    else if (label === 'bearish' && (change24h ?? 0) <= 0)
       positioning = 'risk-off';
-    else if (tone.label !== 'neutral' || Math.abs(change24h ?? 0) >= 1.5)
+    else if (label !== 'neutral' || Math.abs(change24h ?? 0) >= 1.5)
       positioning = 'mixed';
 
     this.lastSource =
-      headlines.length > 0 ? 'headline-tone+tape' : 'tape-only';
+      headlines.length > 0 ? 'google-news+tape' : 'tape-only';
 
     const data = {
       symbol,
-      tone: tone.label,
-      toneScore: tone.score,
+      tone: label,
+      toneScore: score,
       bullishHits: tone.bullish,
       bearishHits: tone.bearish,
+      headlineCount: headlines.length,
       sampleHeadlines: headlines.slice(0, 4),
       change24h,
       momentum,
@@ -131,39 +189,41 @@ export class SentimentSkill extends BaseSkill {
       rTokenSymbol: ticker?.rTokenSymbol ?? null,
       source: this.lastSource,
       guidance:
-        'Equity sentiment = news headline tone + live tape momentum (not crypto Fear & Greed).',
+        headlines.length > 0
+          ? 'Scored recent equity headlines + Bitget Reality / cash tape momentum.'
+          : 'Headlines unavailable this run — positioning from live tape only; News Briefing still has the articles.',
     };
 
     const summary =
-      `${symbol} sentiment ${tone.label} (score ${tone.score >= 0 ? '+' : ''}${tone.score})` +
+      `${symbol} sentiment ${label} (score ${score >= 0 ? '+' : ''}${score})` +
       (change24h != null
         ? ` · tape ${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}% (${momentum})`
         : '') +
-      ` · positioning ${positioning}`;
+      (headlines.length ? ` · ${headlines.length} headlines` : '') +
+      ` · ${positioning}`;
 
     return this.buildResult('sentiment', summary, data);
   }
 
-  private async fetchHeadlines(symbol: string): Promise<string[]> {
-    const base = this.marketData.equityBase(symbol);
-    const q = encodeURIComponent(`${base} stock OR ${base}`);
-    try {
-      const res = await fetch(
-        `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`,
-        {
-          signal: AbortSignal.timeout(10_000),
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        },
-      );
-      const xml = await res.text();
-      const titles = [...xml.matchAll(/<title><!\[CDATA\[(.*?)\]\]><\/title>/g)]
-        .map((m) => m[1]?.trim())
-        .filter((t): t is string => Boolean(t) && !/^Google News$/i.test(t));
-      // First match is often the feed title.
-      return titles.slice(1, 9);
-    } catch {
-      return [];
+  /** Same Google News path as News skill (XMLParser), not a brittle CDATA regex. */
+  private async fetchHeadlines(base: string): Promise<string[]> {
+    const queries = [
+      `${base} stock OR earnings OR equity`,
+      `${base} stock`,
+      base,
+    ];
+    for (const q of queries) {
+      try {
+        const articles = await this.marketData.fetchGoogleNews(q, 8);
+        const titles = articles
+          .map((a) => a.title?.trim())
+          .filter((t): t is string => Boolean(t) && t.length > 8);
+        if (titles.length > 0) return titles;
+      } catch {
+        // try next query
+      }
     }
+    return [];
   }
 
   private scoreHeadlines(titles: string[]): {
@@ -176,12 +236,17 @@ export class SentimentSkill extends BaseSkill {
     let bearish = 0;
     for (const title of titles) {
       const t = title.toLowerCase();
-      for (const w of BULLISH) if (t.includes(w)) bullish += 1;
-      for (const w of BEARISH) if (t.includes(w)) bearish += 1;
+      for (const w of BULLISH) {
+        if (new RegExp(`\\b${w}\\b`, 'i').test(t)) bullish += 1;
+      }
+      for (const w of BEARISH) {
+        if (new RegExp(`\\b${w}\\b`, 'i').test(t)) bearish += 1;
+      }
     }
     const score = bullish - bearish;
+    // Mild lean at ±1 so mixed news desks still show a direction.
     const label =
-      score >= 2 ? 'bullish' : score <= -2 ? 'bearish' : 'neutral';
+      score >= 1 ? 'bullish' : score <= -1 ? 'bearish' : 'neutral';
     return { label, score, bullish, bearish };
   }
 
