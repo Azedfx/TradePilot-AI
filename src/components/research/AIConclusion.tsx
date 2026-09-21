@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, FileText, Search, Sparkles, X } from 'lucide-react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
@@ -43,6 +43,10 @@ export function AIConclusion({
   >(null);
 
   const decision = localDecision ?? session?.decision ?? null;
+
+  useEffect(() => {
+    setLocalDecision(null);
+  }, [sessionId]);
 
   const conclusion =
     thesis?.rationale ??
@@ -108,14 +112,25 @@ export function AIConclusion({
         <div id="section-decision" className="scroll-mt-16">
           {decision ? (
             <div
-              className={`mt-3 flex items-center gap-2 rounded-md px-3 py-2 text-[9px] font-semibold ${
+              className={`mt-3 space-y-1 rounded-md px-3 py-2.5 ${
                 decision === 'accepted'
-                  ? 'border border-[#087263] bg-[#08242a] text-[#36dcb9]'
-                  : 'border border-[#66343b] bg-[#22171e] text-[#f25c63]'
+                  ? 'border border-[#087263] bg-[#08242a]'
+                  : 'border border-[#66343b] bg-[#22171e]'
               }`}
             >
-              {decision === 'accepted' ? <Check size={12} /> : <X size={12} />}
-              Thesis {decision === 'accepted' ? 'accepted' : 'rejected'} by you
+              <div
+                className={`flex items-center gap-2 text-[9px] font-semibold ${
+                  decision === 'accepted' ? 'text-[#36dcb9]' : 'text-[#f25c63]'
+                }`}
+              >
+                {decision === 'accepted' ? <Check size={12} /> : <X size={12} />}
+                Thesis {decision === 'accepted' ? 'accepted' : 'rejected'} — your
+                final call
+              </div>
+              <p className="text-[8px] leading-3 text-[#6f849d]">
+                Saved for this research. Track 3 complete for this idea — no
+                further action required. Run a new question anytime.
+              </p>
             </div>
           ) : (
             <div className="mt-5 grid grid-cols-2 gap-3">

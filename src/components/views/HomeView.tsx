@@ -1,5 +1,4 @@
 import { HeroSection } from '../research/HeroSection';
-import { RecentResearch } from '../research/RecentResearch';
 import { ResearchProgress } from '../research/ResearchProgress';
 import { ResearchSkills } from '../research/ResearchSkills';
 import { AssetNavigation } from '../research/AssetNavigation';
@@ -13,7 +12,6 @@ export function HomeView() {
 
   return (
     <div className="grid min-h-[calc(100vh-52px)] grid-cols-1 xl:grid-cols-[minmax(0,1fr)_350px]">
-      {/* CENTER COLUMN */}
       <div className="min-w-0">
         {error ? (
           <div className="p-2">
@@ -23,19 +21,18 @@ export function HomeView() {
           </div>
         ) : null}
 
-        {/* TOP: HERO + SKILLS */}
+        {/* Ask + live skills */}
         <div className="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[minmax(0,1fr)_300px]">
           <HeroSection />
           <ResearchSkills />
         </div>
 
-        {/* MIDDLE: PROGRESS + RECENT RESEARCH */}
-        <div className="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[minmax(0,1fr)_300px]">
+        {/* Progress only — recent moved to header icon */}
+        <div className="p-2">
           <ResearchProgress />
-          <RecentResearch />
         </div>
 
-        {/* BOTTOM: ASSET NAV + THESIS */}
+        {/* Thesis workspace */}
         <div className="grid grid-cols-1 gap-2 p-2 xl:grid-cols-[194px_minmax(0,1fr)]">
           <AssetNavigation />
           <div className="min-w-0">
@@ -43,18 +40,15 @@ export function HomeView() {
           </div>
         </div>
 
-        {/* Self-evolution review — Track 3 sub-theme */}
         <div className="p-2">
           <SelfReview />
         </div>
 
-        {/* Accept/Reject lives in the right rail on xl+; duplicate here so laptop/mobile judges see it */}
         <div className="p-2 xl:hidden">
           <AIConclusion embedded />
         </div>
       </div>
 
-      {/* RIGHT DESKTOP COLUMN */}
       <AIConclusion />
     </div>
   );
