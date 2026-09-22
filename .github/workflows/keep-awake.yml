@@ -1,11 +1,12 @@
-# Keep the Render free-tier Demo awake (sleeps after ~15m idle).
-# Pings /api/health every 10 minutes. Override URL via repo variable DEMO_URL.
+# GitHub Actions schedule is NOT reliable under ~1 hour (often delayed hours).
+# Use this as a backup only. Primary keep-alive: free cron-job.org / UptimeRobot
+# hitting /api/health every 5–10 minutes (see DEPLOYMENT.md).
 name: Keep Render awake
 
 on:
   schedule:
-    # Every 10 minutes — frequent enough to beat Render's idle sleep.
-    - cron: '*/10 * * * *'
+    # Hourly backup — GitHub actually runs these more consistently than */10.
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -21,7 +22,7 @@ jobs:
           BASE="${DEMO_URL:-https://tradepilot-ai-973j.onrender.com}"
           URL="${BASE%/}/api/health"
           echo "Pinging $URL"
-          # Cold start can take up to ~60s on free tier.
+          # Cold start can take up to ~90s on free tier.
           for i in 1 2 3; do
             if curl -fsS -m 90 "$URL"; then
               echo

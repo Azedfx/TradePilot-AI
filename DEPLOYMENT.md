@@ -20,12 +20,24 @@ web in one service** so a single public URL serves the dashboard and proxies
 ### Keep free-tier Render from sleeping
 
 Free Render services sleep after ~15 minutes idle (first hit then cold-starts).
-This repo includes `.github/workflows/keep-awake.yml`, which pings
-`/api/health` every 10 minutes.
 
-1. Push to GitHub so Actions is enabled.
-2. Optional: set repo **variable** `DEMO_URL` (Settings → Secrets and variables → Actions → Variables) if the URL changes; default is the current Render URL.
-3. Confirm under **Actions → Keep Render awake** that scheduled runs succeed (or run **workflow_dispatch** once).
+**Primary (do this — actually every 5–10 min):** use a free external cron.
+
+1. Open [cron-job.org](https://cron-job.org) (or UptimeRobot) and create an account.
+2. New job → URL:
+   `https://tradepilot-ai-973j.onrender.com/api/health`
+3. Schedule: **every 5 or 10 minutes**.
+4. Save. You should see successful HTTP 200 pings in their history.
+
+**Backup only:** `.github/workflows/keep-awake.yml` runs about **hourly**.
+GitHub Actions will *not* honor `*/10 * * * *` reliably — scheduled runs often
+delay by hours (what you saw: gaps of ~2–4h). That is a GitHub limitation, not
+a bug in the workflow. Keep Actions as a safety net; rely on cron-job.org for
+judge-day uptime.
+
+Optional: set repo variable `DEMO_URL` if the Render URL changes. Manually run
+**Actions → Keep Render awake → Run workflow** to warm the Demo once before a
+demo call.
 
 ### Already have an API-only Render service?
 
