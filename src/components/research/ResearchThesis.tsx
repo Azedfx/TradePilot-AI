@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpen,
   Brain,
   CheckCircle2,
   Clock,
@@ -35,6 +36,14 @@ export function ResearchThesis() {
       ? r
       : String((r as { title?: string })?.title ?? ''),
   );
+  const carriedForward: string[] = (() => {
+    const prefs = (thesis?.signals as { preferences?: unknown } | undefined)
+      ?.preferences as { carryForward?: unknown } | null | undefined;
+    const raw = prefs?.carryForward;
+    return Array.isArray(raw)
+      ? raw.map((c) => String(c).trim()).filter(Boolean)
+      : [];
+  })();
   const done = session?.status === 'COMPLETED';
 
   return (
@@ -73,6 +82,29 @@ export function ResearchThesis() {
                     ? 'Thesis generation is still being processed — refresh shortly.'
                     : 'Run a research prompt to generate a live thesis from the five research skills.')}
               </p>
+
+              {carriedForward.length ? (
+                <div className="mt-3 max-w-140 rounded-lg border border-[#0d5b4f] bg-[#07231f]/70 p-3">
+                  <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold text-[#5fe0c6]">
+                    <BookOpen size={11} />
+                    Addressed from your last review
+                  </div>
+                  <ul className="space-y-1.5">
+                    {carriedForward.map((lesson) => (
+                      <li
+                        key={lesson}
+                        className="flex items-start gap-1.5 text-[9px] leading-3.5 text-[#a7e6d8]"
+                      >
+                        <CheckCircle2
+                          size={11}
+                          className="mt-px shrink-0 text-[#3bdbbc]"
+                        />
+                        {lesson}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </div>
 
