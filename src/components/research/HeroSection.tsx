@@ -2,16 +2,24 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  BookOpen,
   Gauge,
   History,
   LineChart,
   Newspaper,
   Sparkles,
+  X,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
-import { loadDeskPreferences, saveDeskPreferences } from '@/lib/api';
+import {
+  CARRY_FORWARD_EVENT,
+  clearCarryForwardLesson,
+  loadCarryForwardLessons,
+  loadDeskPreferences,
+  saveDeskPreferences,
+} from '@/lib/api';
 
 const EXAMPLES = [
   { text: 'NVDA after earnings', prompt: 'Should I consider buying NVDA after earnings?' },
@@ -38,6 +46,24 @@ export function HeroSection() {
   useEffect(() => {
     saveDeskPreferences({ riskAppetite, focus });
   }, [riskAppetite, focus]);
+
+  const [carried, setCarried] = useState<string[]>([]);
+  const syncCarried = useCallback(() => setCarried(loadCarryForwardLessons()), []);
+
+  useEffect(() => {
+    syncCarried();
+    window.addEventListener(CARRY_FORWARD_EVENT, syncCarried);
+    window.addEventListener('focus', syncCarried);
+    return () => {
+      window.removeEventListener(CARRY_FORWARD_EVENT, syncCarried);
+      window.removeEventListener('focus', syncCarried);
+    };
+  }, [syncCarried]);
+
+  const removeCarried = (lesson: string) => {
+    clearCarryForwardLesson(lesson);
+    syncCarried();
+  };
 
   const submit = () => {
     void runResearch();
@@ -148,6 +174,35 @@ export function HeroSection() {
           </label>
         </div>
 
+        {/* Carried-forward lessons from the last self-evolution review */}
+        {carried.length ? (
+          <div className="mt-4 max-w-140 rounded-lg border border-[#0d5b4f] bg-[#07231f]/70 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-[9px] font-medium text-[#5fe0c6]">
+              <BookOpen size={11} />
+              Carrying {carried.length} lesson{carried.length > 1 ? 's' : ''} from
+              your last review into this run
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {carried.map((lesson) => (
+                <span
+                  key={lesson}
+                  className="flex items-center gap-1 rounded-full border border-[#0f6d5e] bg-[#08302a] px-2 py-1 text-[8px] text-[#a7e6d8]"
+                >
+                  {lesson}
+                  <button
+                    type="button"
+                    onClick={() => removeCarried(lesson)}
+                    className="text-[#5c9d90] transition hover:text-white"
+                    aria-label="Remove lesson"
+                  >
+                    <X size={9} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* Examples */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-[9px] text-[#7e94ae]">Try example:</span>
@@ -181,7 +236,7 @@ export function HeroSection() {
         <NetworkTag text="Macro" icon={<Activity size={9} />} className="right-5 top-26.25" />
         <NetworkTag text="Historical" icon={<History size={9} />} className="right-5 top-37.5" />
         <NetworkTag text="Technical" icon={<LineChart size={9} />} className="left-5 top-28.75" />
-        <NetworkTag text="Macro" icon={<Activity size={9} />} className="left-0 top-15" />
+        <NetworkTag text="Fundamentals" icon={<BarChart3 size={9} />} className="left-0 top-15" />
       </div>
     </section>
   );

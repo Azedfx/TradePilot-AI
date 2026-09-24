@@ -284,6 +284,10 @@ export class ResearchOrchestrator {
       ];
     }
     const focus = context.preferences?.focus;
+    const carryForward = (context.preferences?.carryForward ?? [])
+      .map((c) => String(c).trim())
+      .filter(Boolean)
+      .slice(0, 4);
     const questions = [
       'What are the current catalysts and narratives?',
       focus === 'technical'
@@ -297,6 +301,9 @@ export class ResearchOrchestrator {
               : 'What is the technical structure and trend?',
       'What is sentiment and positioning?',
       'What does the macro backdrop imply for risk?',
+      // Self-evolution loop: last review's acknowledged lessons become
+      // explicit questions this run must address.
+      ...carryForward.map((c) => `Carry-forward lesson from last review: ${c}`),
     ];
     await this.repo.addMessage({
       sessionId,
@@ -305,6 +312,16 @@ export class ResearchOrchestrator {
         focus && focus !== 'balanced' ? ` (focus: ${focus})` : ''
       }.`,
     });
+    if (carryForward.length) {
+      await this.repo.addMessage({
+        sessionId,
+        role: 'assistant',
+        content: `Carrying forward ${carryForward.length} lesson(s) from your last self-evolution review: ${carryForward
+          .map((c) => `“${c}”`)
+          .join('; ')}.`,
+        metadata: { category: 'carry-forward' },
+      });
+    }
     return { objective, skills, questions };
   }
 

@@ -87,6 +87,16 @@ export class ThesisService {
     if (risks.length > 6) risks.length = 6;
     if (catalysts.length > 6) catalysts.length = 6;
 
+    // Self-evolution loop: surface the lessons carried from the last review so
+    // the trader can see the thesis explicitly addressed them this run.
+    const carryForward = (prefs?.carryForward ?? [])
+      .map((c) => String(c).trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (carryForward.length) {
+      rationale = `${rationale} Applied ${carryForward.length} carried-forward lesson(s) from your last review: ${carryForward.join('; ')}.`;
+    }
+
     return {
       symbols,
       direction,

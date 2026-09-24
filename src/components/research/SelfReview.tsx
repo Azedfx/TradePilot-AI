@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { NumberBadge } from '../ui/NumberBadge';
 import { useResearch } from '@/lib/research-context';
-import { getReview } from '@/lib/api';
+import {
+  getReview,
+  CHECKLIST_STORAGE_KEY,
+  CARRY_FORWARD_EVENT,
+} from '@/lib/api';
 import type { ReviewReport } from '@/lib/types';
-
-const CHECKLIST_STORAGE_KEY = 'tradepilot:next-idea-checklist';
 
 /**
  * Self-evolution review after a completed research run.
@@ -189,9 +191,9 @@ export function SelfReview() {
                 </span>
               </div>
               <p className="mb-2 text-[8px] leading-3 text-[#6f849d]">
-                Tick when you&apos;ve considered the point for your next
-                research question. Saved on this device only — it doesn&apos;t
-                change this thesis.
+                Tick a lesson to carry it into your next run — it becomes an
+                explicit research question and is noted on the next thesis.
+                Saved on this device; it doesn&apos;t change this thesis.
               </p>
               <ul className="space-y-2">
                 {review.checklist.map((item) => {
@@ -259,6 +261,8 @@ function readAcked(): Record<string, boolean> {
 function writeAcked(next: Record<string, boolean>) {
   try {
     localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(next));
+    // Let the Hero know its carry-forward chips need to refresh.
+    window.dispatchEvent(new Event(CARRY_FORWARD_EVENT));
   } catch {
     // ignore quota / private mode
   }

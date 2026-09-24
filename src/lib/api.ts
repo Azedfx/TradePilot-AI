@@ -10,24 +10,73 @@ export type DeskPreferences = {
   riskAppetite?: 'conservative' | 'balanced' | 'aggressive';
   focus?: 'earnings' | 'macro' | 'technical' | 'rToken' | 'balanced';
   emphasizeSkills?: string[];
+  /** Lessons ticked in a prior self-evolution review, carried into this run. */
+  carryForward?: string[];
 };
 
 const PREFS_KEY = 'tradepilot:desk-preferences';
+/** Shared with SelfReview.tsx — acknowledged next-idea checklist items. */
+export const CHECKLIST_STORAGE_KEY = 'tradepilot:next-idea-checklist';
+/** Fired whenever the carry-forward checklist changes, so the Hero can sync. */
+export const CARRY_FORWARD_EVENT = 'tradepilot:carry-updated';
+
+/** Read the checklist items the trader ticked to carry into their next run. */
+export function loadCarryForwardLessons(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CHECKLIST_STORAGE_KEY);
+    if (!raw) return [];
+    const map = JSON.parse(raw) as Record<string, boolean>;
+    if (!map || typeof map !== 'object') return [];
+    return Object.entries(map)
+      .filter(([, v]) => Boolean(v))
+      .map(([k]) => k);
+  } catch {
+    return [];
+  }
+}
+
+/** Remove a single carried lesson (or all when no key given) and notify. */
+export function clearCarryForwardLesson(check?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!check) {
+      localStorage.removeItem(CHECKLIST_STORAGE_KEY);
+    } else {
+      const raw = localStorage.getItem(CHECKLIST_STORAGE_KEY);
+      const map = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      delete map[check];
+      localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(map));
+    }
+    window.dispatchEvent(new Event(CARRY_FORWARD_EVENT));
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 export function loadDeskPreferences(): DeskPreferences {
-  if (typeof window === 'undefined') return { riskAppetite: 'balanced', focus: 'balanced' };
+  const base: DeskPreferences = { riskAppetite: 'balanced', focus: 'balanced' };
+  if (typeof window === 'undefined') return base;
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { riskAppetite: 'balanced', focus: 'balanced' };
-    return { riskAppetite: 'balanced', focus: 'balanced', ...JSON.parse(raw) };
+    const stored = raw ? (JSON.parse(raw) as DeskPreferences) : {};
+    const carryForward = loadCarryForwardLessons();
+    return {
+      ...base,
+      ...stored,
+      ...(carryForward.length ? { carryForward } : {}),
+    };
   } catch {
-    return { riskAppetite: 'balanced', focus: 'balanced' };
+    return base;
   }
 }
 
 export function saveDeskPreferences(prefs: DeskPreferences): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  // Never persist carryForward here — it is derived from the checklist store.
+  const { carryForward: _omit, ...rest } = prefs;
+  void _omit;
+  localStorage.setItem(PREFS_KEY, JSON.stringify(rest));
 }
 
 /**
